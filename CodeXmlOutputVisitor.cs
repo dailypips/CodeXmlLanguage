@@ -2295,25 +2295,59 @@ namespace ICSharpCode.ILSpy
         public void VisitAccessor(Accessor accessor)
         {
             StartNode(accessor);
-            WriteAttributes(accessor.Attributes);
-            WriteModifiers(accessor.ModifierTokens);
+
+            
             if (accessor.Role == PropertyDeclaration.GetterRole)
             {
-                WriteKeyword("get");
+                WriteElementStart("get");
             }
             else if (accessor.Role == PropertyDeclaration.SetterRole)
             {
-                WriteKeyword("set");
+                WriteElementStart("set");
             }
             else if (accessor.Role == CustomEventDeclaration.AddAccessorRole)
             {
-                WriteKeyword("add");
+                WriteElementStart("add");
             }
             else if (accessor.Role == CustomEventDeclaration.RemoveAccessorRole)
             {
-                WriteKeyword("remove");
+                WriteElementStart("remove");
             }
-            WriteMethodBody(accessor.Body);
+            if (accessor.Attributes.Count() > 0)
+            {
+                WritePropertyStart("Attributes");
+                WriteAttributes(accessor.Attributes);
+                WritePropertyEnd();
+            }
+            if (accessor.ModifierTokens.Count() > 0)
+            {
+                WritePropertyStart("Modifier");
+                WriteModifiers(accessor.ModifierTokens);
+                WritePropertyEnd();
+            }
+            WriteTagEnd();
+            if (!accessor.Body.IsNull)
+            {
+                WriteCDataStart();
+                WriteMethodBody(accessor.Body);
+                WriteCDataEnd();
+            }
+            if (accessor.Role == PropertyDeclaration.GetterRole)
+            {
+                WriteElementEnd("get");
+            }
+            else if (accessor.Role == PropertyDeclaration.SetterRole)
+            {
+                WriteElementEnd("set");
+            }
+            else if (accessor.Role == CustomEventDeclaration.AddAccessorRole)
+            {
+                WriteElementEnd("add");
+            }
+            else if (accessor.Role == CustomEventDeclaration.RemoveAccessorRole)
+            {
+                WriteElementEnd("remove");
+            }
             EndNode(accessor);
         }
 
@@ -2343,13 +2377,6 @@ namespace ICSharpCode.ILSpy
             EndNode(constructorDeclaration.NameToken);
             WritePropertyEnd();
 
-            if (constructorDeclaration.Parameters.Count() > 0)
-            {
-                WritePropertyStart("Parameters");
-                WriteCommaSeparatedListInParenthesis(constructorDeclaration.Parameters, policy.SpaceWithinMethodDeclarationParentheses);
-                WritePropertyEnd();
-            }
-
             if (!constructorDeclaration.Initializer.IsNull)
             {
                 WritePropertyStart("Initializer");
@@ -2357,6 +2384,16 @@ namespace ICSharpCode.ILSpy
                 WritePropertyEnd();
             }
             WriteTagEnd();
+
+            if (constructorDeclaration.Parameters.Count() > 0)
+            {
+                WriteElementStart("Parameters"); WriteTagEnd();
+                foreach (var param in constructorDeclaration.Parameters)
+                    VisitParameterDeclaration(param);
+                //WriteCommaSeparatedListInParenthesis(constructorDeclaration.Parameters, policy.SpaceWithinMethodDeclarationParentheses);
+                WriteElementEnd("Parameters");
+            }
+            
             WriteElementStart("body"); WriteTagEnd();
             WriteCDataStart();
             WriteMethodBody(constructorDeclaration.Body);
@@ -2451,22 +2488,40 @@ namespace ICSharpCode.ILSpy
         public void VisitEventDeclaration(EventDeclaration eventDeclaration)
         {
             StartNode(eventDeclaration);
-            WriteAttributes(eventDeclaration.Attributes);
-            WriteModifiers(eventDeclaration.ModifierTokens);
-            WriteKeyword(EventDeclaration.EventKeywordRole);
+            WriteElementStart(EventDeclaration.EventKeywordRole.ToString());
+            
+            if (eventDeclaration.Attributes.Count() > 0)
+            {
+                WritePropertyStart("Attributes");
+                WriteAttributes(eventDeclaration.Attributes);
+                WritePropertyEnd();
+            }
+
+            if (eventDeclaration.ModifierTokens.Count() > 0)
+            {
+                WritePropertyStart("Modifier");
+                WriteModifiers(eventDeclaration.ModifierTokens);
+                WritePropertyEnd();
+            }
+
+            WritePropertyStart("ReturnType");
             eventDeclaration.ReturnType.AcceptVisitor(this);
-            Space();
-            WriteCommaSeparatedList(eventDeclaration.Variables);
-            Semicolon();
+            WritePropertyEnd();
+
+            WriteTagEnd();
+            WriteCommaSeparatedList(eventDeclaration.Variables); // TODO
+
+            WriteElementEnd(EventDeclaration.EventKeywordRole.ToString());
             EndNode(eventDeclaration);
         }
 
         public void VisitCustomEventDeclaration(CustomEventDeclaration customEventDeclaration)
         {
             StartNode(customEventDeclaration);
+            WriteElementStart(CustomEventDeclaration.EventKeywordRole.ToString());
             WriteAttributes(customEventDeclaration.Attributes);
             WriteModifiers(customEventDeclaration.ModifierTokens);
-            WriteKeyword(CustomEventDeclaration.EventKeywordRole);
+ 
             customEventDeclaration.ReturnType.AcceptVisitor(this);
             Space();
             WritePrivateImplementationType(customEventDeclaration.PrivateImplementationType);
@@ -2481,7 +2536,7 @@ namespace ICSharpCode.ILSpy
                 }
             }
             CloseBrace(policy.EventBraceStyle);
-            NewLine();
+            WriteElementEnd(CustomEventDeclaration.EventKeywordRole.ToString());
             EndNode(customEventDeclaration);
         }
 
@@ -2601,20 +2656,60 @@ namespace ICSharpCode.ILSpy
         public void VisitMethodDeclaration(MethodDeclaration methodDeclaration)
         {
             StartNode(methodDeclaration);
-            WriteAttributes(methodDeclaration.Attributes);
-            WriteModifiers(methodDeclaration.ModifierTokens);
+            WriteElementStart("method");
+            if (methodDeclaration.Attributes.Count() > 0)
+            {
+                WritePropertyStart("Attributes");
+                WriteAttributes(methodDeclaration.Attributes);
+                WritePropertyEnd();
+            }
+            if (methodDeclaration.ModifierTokens.Count() > 0)
+            {
+                WritePropertyStart("Modifier");
+                WriteModifiers(methodDeclaration.ModifierTokens);
+                WritePropertyEnd();
+            }
+
+            WritePropertyStart("ReturnType");
             methodDeclaration.ReturnType.AcceptVisitor(this);
-            Space();
+            WritePropertyEnd();
+
             WritePrivateImplementationType(methodDeclaration.PrivateImplementationType);
+
+            WritePropertyStart("Name");
             methodDeclaration.NameToken.AcceptVisitor(this);
-            WriteTypeParameters(methodDeclaration.TypeParameters);
-            Space(policy.SpaceBeforeMethodDeclarationParentheses);
-            WriteCommaSeparatedListInParenthesis(methodDeclaration.Parameters, policy.SpaceWithinMethodDeclarationParentheses);
+            WritePropertyEnd();
+
+            if (methodDeclaration.TypeParameters.Count() > 0)
+            {
+                WritePropertyStart("TypeParameters");
+                WriteTypeParameters(methodDeclaration.TypeParameters);
+                WritePropertyEnd();
+            }
+            //Space(policy.SpaceBeforeMethodDeclarationParentheses);
+            WritePropertyStart("Constraints");
             foreach (Constraint constraint in methodDeclaration.Constraints)
             {
                 constraint.AcceptVisitor(this);
             }
+            WritePropertyEnd();
+            WriteTagEnd();
+            WriteElementStart("Parameters");WriteTagEnd();
+            if (methodDeclaration.Parameters.Count > 0)
+            {
+                foreach (ParameterDeclaration param in methodDeclaration.Parameters)
+                {
+                    VisitParameterDeclaration(param);
+                }
+            }
+            WriteElementEnd("Parameters");
+            //WriteCommaSeparatedListInParenthesis(methodDeclaration.Parameters, policy.SpaceWithinMethodDeclarationParentheses);
+            WriteElementStart("Body"); WriteTagEnd();
+            WriteCDataStart();
             WriteMethodBody(methodDeclaration.Body);
+            WriteCDataEnd();
+            WriteElementEnd("Body");
+            WriteElementEnd("method");
             EndNode(methodDeclaration);
         }
 
@@ -2655,7 +2750,15 @@ namespace ICSharpCode.ILSpy
         public void VisitParameterDeclaration(ParameterDeclaration parameterDeclaration)
         {
             StartNode(parameterDeclaration);
-            WriteAttributes(parameterDeclaration.Attributes);
+            WriteElementStart("Parameter");
+
+            if (parameterDeclaration.Attributes.Count() > 0)
+            {
+                WritePropertyStart("Attributes");
+                WriteAttributes(parameterDeclaration.Attributes);
+                WritePropertyEnd();
+            }
+            WritePropertyStart("Modifier");
             switch (parameterDeclaration.ParameterModifier)
             {
                 case ParameterModifier.Ref:
@@ -2671,45 +2774,77 @@ namespace ICSharpCode.ILSpy
                     WriteKeyword(ParameterDeclaration.ThisModifierRole);
                     break;
             }
+            WritePropertyEnd();
+            WritePropertyStart("Type");
             parameterDeclaration.Type.AcceptVisitor(this);
-            if (!parameterDeclaration.Type.IsNull && !string.IsNullOrEmpty(parameterDeclaration.Name))
+            WritePropertyEnd();
+            /*if (!parameterDeclaration.Type.IsNull && !string.IsNullOrEmpty(parameterDeclaration.Name))
             {
                 Space();
-            }
+            }*/
+
             if (!string.IsNullOrEmpty(parameterDeclaration.Name))
             {
+                WritePropertyStart("Name");
                 parameterDeclaration.NameToken.AcceptVisitor(this);
+                WritePropertyEnd();
             }
             if (!parameterDeclaration.DefaultExpression.IsNull)
             {
-                Space(policy.SpaceAroundAssignment);
-                WriteToken(Roles.Assign);
-                Space(policy.SpaceAroundAssignment);
+                WritePropertyStart("Default");
+                //Space(policy.SpaceAroundAssignment);
+                //WriteToken(Roles.Assign);
+                //Space(policy.SpaceAroundAssignment);
                 parameterDeclaration.DefaultExpression.AcceptVisitor(this);
+                WritePropertyEnd();
             }
+            WriteIdentifier(" />");
             EndNode(parameterDeclaration);
         }
 
         public void VisitPropertyDeclaration(PropertyDeclaration propertyDeclaration)
         {
             StartNode(propertyDeclaration);
-            WriteAttributes(propertyDeclaration.Attributes);
-            WriteModifiers(propertyDeclaration.ModifierTokens);
+            WriteElementStart("property");
+
+            if (propertyDeclaration.Attributes.Count() > 0)
+            {
+                WritePropertyStart("Attributes");
+                WriteAttributes(propertyDeclaration.Attributes);
+                WritePropertyEnd();
+            }
+
+            if (propertyDeclaration.ModifierTokens.Count() > 0)
+            {
+                WritePropertyStart("Modifier");
+                WriteModifiers(propertyDeclaration.ModifierTokens);
+                WritePropertyEnd();
+            }
+
+            WritePropertyStart("ReturnType");
             propertyDeclaration.ReturnType.AcceptVisitor(this);
-            Space();
+            WritePropertyEnd();
+            //Space();
+            WritePropertyStart("PrivateImplementationType");
             WritePrivateImplementationType(propertyDeclaration.PrivateImplementationType);
+            WritePropertyEnd();
+            
+            WritePropertyStart("Name");
             propertyDeclaration.NameToken.AcceptVisitor(this);
-            OpenBrace(policy.PropertyBraceStyle);
+            WritePropertyEnd();
+            WriteTagEnd();
+            //OpenBrace(policy.PropertyBraceStyle);
             // output get/set in their original order
             foreach (AstNode node in propertyDeclaration.Children)
             {
-                if (node.Role == IndexerDeclaration.GetterRole || node.Role == IndexerDeclaration.SetterRole)
-                {
+                if (node.Role == IndexerDeclaration.GetterRole || node.Role == IndexerDeclaration.SetterRole){
                     node.AcceptVisitor(this);
                 }
             }
-            CloseBrace(policy.PropertyBraceStyle);
-            NewLine();
+            
+            WriteElementEnd("property");
+            //CloseBrace(policy.PropertyBraceStyle);
+            //NewLine();
             EndNode(propertyDeclaration);
         }
 
