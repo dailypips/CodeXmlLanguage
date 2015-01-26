@@ -39,7 +39,11 @@ namespace ICSharpCode.ILSpy
         readonly CSharpFormattingOptions policy;
         readonly Stack<AstNode> containerStack = new Stack<AstNode>();
         readonly Stack<AstNode> positionStack = new Stack<AstNode>();
+        bool needEscapeConvert = true;
+        bool InCDataSection = false;
 
+        private static readonly char[] s_escapeChars = new char[] { '<', '>', '"', '\'', '&' };
+        private static readonly string[] s_escapeStringPairs = new string[] { "<", "&lt;", ">", "&gt;", "\"", "&quot;", "'", "&apos;", "&", "&amp;" };
         /// <summary>
         /// Used to insert the minimal amount of spaces so that the lexer recognizes the tokens that were written.
         /// </summary>
@@ -306,7 +310,7 @@ namespace ICSharpCode.ILSpy
             {
                 formatter.Space();
             }
-            formatter.WriteKeyword(token);
+            formatter.WriteKeyword(checkXmlEsc(token));
             lastWritten = LastWritten.KeywordOrIdentifier;
         }
 
@@ -327,8 +331,46 @@ namespace ICSharpCode.ILSpy
                 formatter.Space();
                 // this space is strictly required, so we directly call the formatter
             }
-            formatter.WriteIdentifier(identifier);
+            formatter.WriteIdentifier(checkXmlEsc(identifier));
             lastWritten = LastWritten.KeywordOrIdentifier;
+        }
+
+        string checkXmlEsc(string identifier)
+        {
+            if (needEscapeConvert && !InCDataSection)
+            {
+                string escaped = identifier.Replace("'", "&apos;").Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;").Replace("\"", "&quot;");
+                return escaped;
+                // test multi " in string
+                /*int count = 0;
+                foreach (char c in escaped)
+                {
+                    if (c == '"') count++;
+                }
+                if (count <= 2)
+                    return escaped;
+
+                int index = 0;
+                StringBuilder result = new StringBuilder();
+                foreach (char c in escaped)
+                {
+                    if (c != '"')
+                        result.Append(c);
+                    else
+                    {
+                        ++index;
+                        if (index == 1 || index == count)
+                            result.Append('"');
+                        else
+                            result.Append("&quot;");
+                    }
+                }
+                return result.ToString();*/
+            }
+            else
+            {
+                return identifier;
+            }
         }
 
         void WriteToken(TokenRole tokenRole)
@@ -353,7 +395,7 @@ namespace ICSharpCode.ILSpy
             {
                 formatter.Space();
             }
-            formatter.WriteToken(token);
+            formatter.WriteToken(checkXmlEsc(token));
             if (token == "+")
             {
                 lastWritten = LastWritten.Plus;
@@ -438,47 +480,71 @@ namespace ICSharpCode.ILSpy
 
         void WritePropertyStart(string prop)
         {
+            needEscapeConvert = false;
             WriteIdentifier(" " + prop + " = \"");
+            needEscapeConvert = true;
         }
         
         void WritePropertyEnd()
         {
+            needEscapeConvert = false;
             WriteIdentifier("\"");
+            needEscapeConvert = true;
         }
+
 
         void WriteTagStart()
         {
+            needEscapeConvert = false;
             WriteIdentifier("<");
+            needEscapeConvert = true;
         }
         void WriteTagEnd()
         {
+            needEscapeConvert = false;
             WriteIdentifier(">");
+            needEscapeConvert = true;
             NewLine();
         }
 
         void WriteElementStart(string element)
         {
+            needEscapeConvert = false;
             WriteIdentifier( "<" + element);
+            needEscapeConvert = true;
         }
 
         void WriteElementEnd(string tag)
         {
             NewLine();
+            needEscapeConvert = false;
             WriteIdentifier("</" + tag + ">");
+            needEscapeConvert = true;
             NewLine();
         }
-
+        void WriteElementTail()
+        {
+            needEscapeConvert = false;
+            WriteIdentifier(" />");
+            needEscapeConvert = true;
+        }
         void WriteCDataStart()
         {
             NewLine();
+            needEscapeConvert = false;
             WriteIdentifier("<![CDATA[");
+            InCDataSection = true;
+            needEscapeConvert = true;
             NewLine();
         }
 
         void WriteCDataEnd()
         {
             NewLine();
+            needEscapeConvert = false;
             WriteIdentifier("]]>");
+            InCDataSection = false;
+            needEscapeConvert = true;
             NewLine();
 
         }
@@ -587,7 +653,7 @@ namespace ICSharpCode.ILSpy
                     lastWritten = LastWritten.Other;
                 }
                 WriteSpecialsUpToNode(ident);
-                formatter.WriteIdentifier(ident.Name);
+                formatter.WriteIdentifier(checkXmlEsc(ident.Name));
                 lastWritten = LastWritten.KeywordOrIdentifier;
             }
         }
@@ -1114,7 +1180,7 @@ namespace ICSharpCode.ILSpy
             StartNode(primitiveExpression);
             if (!string.IsNullOrEmpty(primitiveExpression.LiteralValue))
             {
-                formatter.WriteToken(primitiveExpression.LiteralValue);
+                formatter.WriteToken(checkXmlEsc(primitiveExpression.LiteralValue));
             }
             else
             {
@@ -1155,17 +1221,17 @@ namespace ICSharpCode.ILSpy
 
             if (val is string)
             {
-                formatter.WriteToken("\"" + ConvertString(val.ToString()) + "\"");
+                formatter.WriteToken(checkXmlEsc("\"" + ConvertString(val.ToString()) + "\""));
                 lastWritten = LastWritten.Other;
             }
             else if (val is char)
             {
-                formatter.WriteToken("'" + ConvertCharLiteral((char)val) + "'");
+                formatter.WriteToken(checkXmlEsc("'" + ConvertCharLiteral((char)val) + "'"));
                 lastWritten = LastWritten.Other;
             }
             else if (val is decimal)
             {
-                formatter.WriteToken(((decimal)val).ToString(NumberFormatInfo.InvariantInfo) + "m");
+                formatter.WriteToken(checkXmlEsc(((decimal)val).ToString(NumberFormatInfo.InvariantInfo) + "m"));
                 lastWritten = LastWritten.Other;
             }
             else if (val is float)
@@ -1198,7 +1264,7 @@ namespace ICSharpCode.ILSpy
                     // the special case here than to do it in all code generators)
                     formatter.WriteToken("-");
                 }
-                formatter.WriteToken(f.ToString("R", NumberFormatInfo.InvariantInfo) + "f");
+                formatter.WriteToken(checkXmlEsc(f.ToString("R", NumberFormatInfo.InvariantInfo) + "f"));
                 lastWritten = LastWritten.Other;
             }
             else if (val is double)
@@ -1236,7 +1302,7 @@ namespace ICSharpCode.ILSpy
                 {
                     number += ".0";
                 }
-                formatter.WriteToken(number);
+                formatter.WriteToken(checkXmlEsc(number));
                 // needs space if identifier follows number; this avoids mistaking the following identifier as type suffix
                 lastWritten = LastWritten.KeywordOrIdentifier;
             }
@@ -1257,13 +1323,13 @@ namespace ICSharpCode.ILSpy
                 {
                     b.Append("L");
                 }
-                formatter.WriteToken(b.ToString());
+                formatter.WriteToken(checkXmlEsc(b.ToString()));
                 // needs space if identifier follows number; this avoids mistaking the following identifier as type suffix
                 lastWritten = LastWritten.KeywordOrIdentifier;
             }
             else
             {
-                formatter.WriteToken(val.ToString());
+                formatter.WriteToken(checkXmlEsc(val.ToString()));
                 lastWritten = LastWritten.Other;
             }
         }
@@ -1648,8 +1714,8 @@ namespace ICSharpCode.ILSpy
             WritePropertyEnd();
             if (delegateDeclaration.TypeParameters.Count() > 0)
             {
-                WritePropertyStart("Parameters");
-                WriteTypeParameters(delegateDeclaration.TypeParameters);
+                WritePropertyStart("TypeParameters");
+                delegateDeclaration.TypeParameters.AcceptVisitor(this);
                 WritePropertyEnd();
             }
 
@@ -1666,7 +1732,14 @@ namespace ICSharpCode.ILSpy
             WriteTagEnd();
             formatter.Indent();
 
-            WriteCommaSeparatedListInParenthesis(delegateDeclaration.Parameters, policy.SpaceWithinMethodDeclarationParentheses);
+            //WriteCommaSeparatedListInParenthesis(delegateDeclaration.Parameters, policy.SpaceWithinMethodDeclarationParentheses);
+            if (delegateDeclaration.Parameters.Count() > 0)
+            {
+                WriteElementStart("Parameters");WriteTagEnd();
+                foreach (var param in delegateDeclaration.Parameters)
+                    VisitParameterDeclaration(param);
+                WriteElementEnd("Parameters");
+            }
 
             formatter.Unindent();
             WriteElementEnd(Roles.DelegateKeyword.ToString());
@@ -1721,7 +1794,7 @@ namespace ICSharpCode.ILSpy
 
             if (typeDeclaration.TypeParameters.Count() > 0)
             {
-                WritePropertyStart("Parameters");
+                WritePropertyStart("TypeParameters");
                 WriteTypeParameters(typeDeclaration.TypeParameters);
                 WritePropertyEnd();
             }
@@ -2294,9 +2367,7 @@ namespace ICSharpCode.ILSpy
         #region TypeMembers
         public void VisitAccessor(Accessor accessor)
         {
-            StartNode(accessor);
-
-            
+            StartNode(accessor);        
             if (accessor.Role == PropertyDeclaration.GetterRole)
             {
                 WriteElementStart("get");
@@ -2395,9 +2466,12 @@ namespace ICSharpCode.ILSpy
             }
             
             WriteElementStart("body"); WriteTagEnd();
-            WriteCDataStart();
-            WriteMethodBody(constructorDeclaration.Body);
-            WriteCDataEnd();
+            if (!constructorDeclaration.Body.IsNull)
+            {
+                WriteCDataStart();
+                WriteMethodBody(constructorDeclaration.Body);
+                WriteCDataEnd();
+            }
             WriteElementEnd("body");
             WriteElementEnd("constructor");
             EndNode(constructorDeclaration);
@@ -2447,8 +2521,14 @@ namespace ICSharpCode.ILSpy
             WritePropertyEnd();
             WriteTagEnd();
             WriteElementStart("body"); WriteTagEnd();
-            WriteMethodBody(destructorDeclaration.Body);
+            if (!destructorDeclaration.Body.IsNull)
+            {
+                WriteCDataStart();
+                WriteMethodBody(destructorDeclaration.Body);
+                WriteCDataEnd();
+            }
             WriteElementEnd("body");
+            WriteElementEnd("destructor");
             EndNode(destructorDeclaration);
         }
 
@@ -2480,7 +2560,8 @@ namespace ICSharpCode.ILSpy
                 enumMemberDeclaration.Initializer.AcceptVisitor(this);
                 WritePropertyEnd();
             }
-            WriteIdentifier(" />");
+
+            WriteElementTail();
             NewLine();
             EndNode(enumMemberDeclaration);
         }
@@ -2509,7 +2590,10 @@ namespace ICSharpCode.ILSpy
             WritePropertyEnd();
 
             WriteTagEnd();
-            WriteCommaSeparatedList(eventDeclaration.Variables); // TODO
+            WriteElementStart("Variable"); WriteTagEnd();
+            eventDeclaration.Variables.AcceptVisitor(this);
+            WriteElementEnd("Variable");
+            //WriteCommaSeparatedList(eventDeclaration.Variables); // TODO
 
             WriteElementEnd(EventDeclaration.EventKeywordRole.ToString());
             EndNode(eventDeclaration);
@@ -2519,14 +2603,36 @@ namespace ICSharpCode.ILSpy
         {
             StartNode(customEventDeclaration);
             WriteElementStart(CustomEventDeclaration.EventKeywordRole.ToString());
-            WriteAttributes(customEventDeclaration.Attributes);
-            WriteModifiers(customEventDeclaration.ModifierTokens);
- 
+            //WriteAttributes(customEventDeclaration.Attributes);
+            //WriteModifiers(customEventDeclaration.ModifierTokens);
+
+            if (customEventDeclaration.Attributes.Count() > 0)
+            {
+                WritePropertyStart("Attributes");
+                WriteAttributes(customEventDeclaration.Attributes);
+                WritePropertyEnd();
+            }
+
+            if (customEventDeclaration.ModifierTokens.Count() > 0)
+            {
+                WritePropertyStart("Modifier");
+                WriteModifiers(customEventDeclaration.ModifierTokens);
+                WritePropertyEnd();
+            }
+            WritePropertyStart("ReturnType");
             customEventDeclaration.ReturnType.AcceptVisitor(this);
-            Space();
-            WritePrivateImplementationType(customEventDeclaration.PrivateImplementationType);
+            WritePropertyEnd();
+            //customEventDeclaration.ReturnType.AcceptVisitor(this);
+            //Space();
+            WritePropertyStart("PrivateImplementationType");
+            customEventDeclaration.PrivateImplementationType.AcceptVisitor(this);
+            WritePropertyEnd();
+            //WritePrivateImplementationType(customEventDeclaration.PrivateImplementationType);
+            WritePropertyStart("Name");
             customEventDeclaration.NameToken.AcceptVisitor(this);
-            OpenBrace(policy.EventBraceStyle);
+            WritePropertyEnd();
+            WriteTagEnd();
+            //OpenBrace(policy.EventBraceStyle);
             // output add/remove in their original order
             foreach (AstNode node in customEventDeclaration.Children)
             {
@@ -2535,7 +2641,7 @@ namespace ICSharpCode.ILSpy
                     node.AcceptVisitor(this);
                 }
             }
-            CloseBrace(policy.EventBraceStyle);
+            //CloseBrace(policy.EventBraceStyle);
             WriteElementEnd(CustomEventDeclaration.EventKeywordRole.ToString());
             EndNode(customEventDeclaration);
         }
@@ -2573,13 +2679,16 @@ namespace ICSharpCode.ILSpy
                     WriteIdentifier(node.Name);
                     WritePropertyEnd();
 
-                    WritePropertyStart("Initializer");
-                    node.Initializer.AcceptVisitor(this);
-                    WritePropertyEnd();
+                    if (!node.Initializer.IsNull)
+                    {
+                        WritePropertyStart("Initializer");
+                        node.Initializer.AcceptVisitor(this);
+                        WritePropertyEnd();
+                    }
                 }
             }
             
-            WriteIdentifier(" />");
+            WriteElementTail();
             NewLine();
             EndNode(fieldDeclaration);
         }
@@ -2608,7 +2717,7 @@ namespace ICSharpCode.ILSpy
             fixedFieldDeclaration.ReturnType.AcceptVisitor(this);
             WritePropertyEnd();
 
-            WriteIdentifier(" />");
+            WriteElementTail();
             NewLine();
             EndNode(fixedFieldDeclaration);
         }
@@ -2631,15 +2740,41 @@ namespace ICSharpCode.ILSpy
         public void VisitIndexerDeclaration(IndexerDeclaration indexerDeclaration)
         {
             StartNode(indexerDeclaration);
-            WriteAttributes(indexerDeclaration.Attributes);
-            WriteModifiers(indexerDeclaration.ModifierTokens);
+            WriteElementStart("indexer");
+
+            if (indexerDeclaration.Attributes.Count() > 0)
+            {
+                WritePropertyStart("Attributes");
+                WriteAttributes(indexerDeclaration.Attributes);
+                WritePropertyEnd();
+            }
+
+            if (indexerDeclaration.ModifierTokens.Count() > 0)
+            {
+                WritePropertyStart("Attributes");
+                WriteModifiers(indexerDeclaration.ModifierTokens);
+                WritePropertyEnd();
+            }
+
+            WritePropertyStart("ReturnType");
             indexerDeclaration.ReturnType.AcceptVisitor(this);
-            Space();
+            WritePropertyEnd();
+
+            //Space();
+            WritePropertyStart("PrivateImplementationType");
             WritePrivateImplementationType(indexerDeclaration.PrivateImplementationType);
-            WriteKeyword(IndexerDeclaration.ThisKeywordRole);
-            Space(policy.SpaceBeforeMethodDeclarationParentheses);
-            WriteCommaSeparatedListInBrackets(indexerDeclaration.Parameters, policy.SpaceWithinMethodDeclarationParentheses);
-            OpenBrace(policy.PropertyBraceStyle);
+            WritePropertyEnd();
+            WriteTagEnd();
+            //WriteKeyword(IndexerDeclaration.ThisKeywordRole);
+            //Space(policy.SpaceBeforeMethodDeclarationParentheses);
+            WriteElementStart("Parameters"); WriteTagEnd();
+            foreach(var param in indexerDeclaration.Parameters)
+                VisitParameterDeclaration(param);
+            WriteElementEnd("Parameters");
+            
+            NewLine();
+            //WriteCommaSeparatedListInBrackets(indexerDeclaration.Parameters, policy.SpaceWithinMethodDeclarationParentheses);
+            //OpenBrace(policy.PropertyBraceStyle);
             // output get/set in their original order
             foreach (AstNode node in indexerDeclaration.Children)
             {
@@ -2648,8 +2783,9 @@ namespace ICSharpCode.ILSpy
                     node.AcceptVisitor(this);
                 }
             }
-            CloseBrace(policy.PropertyBraceStyle);
-            NewLine();
+            //CloseBrace(policy.PropertyBraceStyle);
+            //NewLine();
+            WriteElementEnd("indexer");
             EndNode(indexerDeclaration);
         }
 
@@ -2673,9 +2809,9 @@ namespace ICSharpCode.ILSpy
             WritePropertyStart("ReturnType");
             methodDeclaration.ReturnType.AcceptVisitor(this);
             WritePropertyEnd();
-
+            WritePropertyStart("PrivateImplementationType");
             WritePrivateImplementationType(methodDeclaration.PrivateImplementationType);
-
+            WritePropertyEnd();
             WritePropertyStart("Name");
             methodDeclaration.NameToken.AcceptVisitor(this);
             WritePropertyEnd();
@@ -2705,9 +2841,12 @@ namespace ICSharpCode.ILSpy
             WriteElementEnd("Parameters");
             //WriteCommaSeparatedListInParenthesis(methodDeclaration.Parameters, policy.SpaceWithinMethodDeclarationParentheses);
             WriteElementStart("Body"); WriteTagEnd();
-            WriteCDataStart();
-            WriteMethodBody(methodDeclaration.Body);
-            WriteCDataEnd();
+            if (!methodDeclaration.Body.IsNull)
+            {
+                WriteCDataStart();
+                WriteMethodBody(methodDeclaration.Body);
+                WriteCDataEnd();
+            }
             WriteElementEnd("Body");
             WriteElementEnd("method");
             EndNode(methodDeclaration);
@@ -2798,7 +2937,7 @@ namespace ICSharpCode.ILSpy
                 parameterDeclaration.DefaultExpression.AcceptVisitor(this);
                 WritePropertyEnd();
             }
-            WriteIdentifier(" />");
+            WriteElementTail();
             EndNode(parameterDeclaration);
         }
 
@@ -2867,6 +3006,8 @@ namespace ICSharpCode.ILSpy
 
         public void VisitSyntaxTree(SyntaxTree syntaxTree)
         {
+            //formatter.WriteComment(CommentType.InactiveCode, "<?xml version=\"1.0\" encoding=\"UTF-8\"?>");
+            //NewLine();
             // don't do node tracking as we visit all children directly
             foreach (AstNode node in syntaxTree.Children)
             {

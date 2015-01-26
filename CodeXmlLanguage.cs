@@ -219,7 +219,6 @@ namespace ICSharpCode.ILSpy
 
         void GenerateCode(AstBuilder astBuilder, ITextOutput output)
         {
-            astBuilder.RunTransformations();
             var syntaxTree = astBuilder.SyntaxTree;
             syntaxTree.AcceptVisitor(new InsertParenthesesVisitor { InsertParenthesesForReadability = true });
             var outputFormatter = new TextOutputFormatter(output) { FoldBraces = true };
