@@ -42,8 +42,6 @@ namespace ICSharpCode.ILSpy
         bool needEscapeConvert = true;
         bool InCDataSection = false;
 
-        private static readonly char[] s_escapeChars = new char[] { '<', '>', '"', '\'', '&' };
-        private static readonly string[] s_escapeStringPairs = new string[] { "<", "&lt;", ">", "&gt;", "\"", "&quot;", "'", "&apos;", "&", "&amp;" };
         /// <summary>
         /// Used to insert the minimal amount of spaces so that the lexer recognizes the tokens that were written.
         /// </summary>
@@ -339,33 +337,7 @@ namespace ICSharpCode.ILSpy
         {
             if (needEscapeConvert && !InCDataSection)
             {
-                string escaped = identifier.Replace("'", "&apos;").Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;").Replace("\"", "&quot;");
-                return escaped;
-                // test multi " in string
-                /*int count = 0;
-                foreach (char c in escaped)
-                {
-                    if (c == '"') count++;
-                }
-                if (count <= 2)
-                    return escaped;
-
-                int index = 0;
-                StringBuilder result = new StringBuilder();
-                foreach (char c in escaped)
-                {
-                    if (c != '"')
-                        result.Append(c);
-                    else
-                    {
-                        ++index;
-                        if (index == 1 || index == count)
-                            result.Append('"');
-                        else
-                            result.Append("&quot;");
-                    }
-                }
-                return result.ToString();*/
+                return identifier.Replace("'", "&apos;").Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;").Replace("\"", "&quot;");
             }
             else
             {
@@ -683,7 +655,8 @@ namespace ICSharpCode.ILSpy
         {
             if (body.IsNull)
             {
-                Semicolon();
+                //Semicolon();
+                WriteElementStart("EmptyStatement"); WriteElementTail();
             }
             else
             {
@@ -714,23 +687,36 @@ namespace ICSharpCode.ILSpy
         public void VisitAnonymousMethodExpression(AnonymousMethodExpression anonymousMethodExpression)
         {
             StartNode(anonymousMethodExpression);
+            WriteElementStart("AnonymousMethodExpression");
             if (anonymousMethodExpression.IsAsync)
             {
-                WriteKeyword(AnonymousMethodExpression.AsyncModifierRole);
-                Space();
+                WritePropertyStart(AnonymousMethodExpression.AsyncModifierRole.ToString());
+                WritePropertyEnd();
+                //WriteKeyword(AnonymousMethodExpression.AsyncModifierRole);
+                //Space();
             }
-            WriteKeyword(AnonymousMethodExpression.DelegateKeywordRole);
+            WritePropertyStart(AnonymousMethodExpression.DelegateKeywordRole.ToString());
+            WritePropertyEnd();
+            WriteTagEnd();
+            //WriteKeyword(AnonymousMethodExpression.DelegateKeywordRole);
             if (anonymousMethodExpression.HasParameterList)
             {
-                Space(policy.SpaceBeforeMethodDeclarationParentheses);
-                WriteCommaSeparatedListInParenthesis(anonymousMethodExpression.Parameters, policy.SpaceWithinMethodDeclarationParentheses);
+                WriteElementStart("Parameters"); WriteTagEnd();
+                anonymousMethodExpression.Parameters.AcceptVisitor(this);
+                WriteElementEnd("Parameters");
+                //Space(policy.SpaceBeforeMethodDeclarationParentheses);
+                //WriteCommaSeparatedListInParenthesis(anonymousMethodExpression.Parameters, policy.SpaceWithinMethodDeclarationParentheses);
             }
+            WriteElementStart("Body"); WriteTagEnd();
             anonymousMethodExpression.Body.AcceptVisitor(this);
+            WriteElementEnd("Body");
+            WriteElementEnd("AnonymousMethodExpression");
             EndNode(anonymousMethodExpression);
         }
 
         public void VisitUndocumentedExpression(UndocumentedExpression undocumentedExpression)
         {
+            //UNUSED
             StartNode(undocumentedExpression);
             switch (undocumentedExpression.UndocumentedExpressionType)
             {
@@ -759,17 +745,30 @@ namespace ICSharpCode.ILSpy
         public void VisitArrayCreateExpression(ArrayCreateExpression arrayCreateExpression)
         {
             StartNode(arrayCreateExpression);
-            WriteKeyword(ArrayCreateExpression.NewKeywordRole);
+            WriteElementStart("ArrayCreateExpression");
+            //WriteKeyword(ArrayCreateExpression.NewKeywordRole);
+            WritePropertyStart("Type");
             arrayCreateExpression.Type.AcceptVisitor(this);
+            WritePropertyEnd();
+            WriteTagEnd();
+
             if (arrayCreateExpression.Arguments.Count > 0)
             {
-                WriteCommaSeparatedListInBrackets(arrayCreateExpression.Arguments);
+                WriteElementStart("Arguments"); WriteTagEnd();
+                arrayCreateExpression.Arguments.AcceptVisitor(this);
+                WriteElementEnd("Arguments");
+                //WriteCommaSeparatedListInBrackets(arrayCreateExpression.Arguments);
             }
             foreach (var specifier in arrayCreateExpression.AdditionalArraySpecifiers)
             {
+                WriteElementStart("Specifier"); WriteTagEnd();
                 specifier.AcceptVisitor(this);
+                WriteElementEnd("Specifier");
             }
+            WriteElementStart("Initializer"); WriteTagEnd();
             arrayCreateExpression.Initializer.AcceptVisitor(this);
+            WriteElementEnd("Initializer");
+            WriteElementEnd("ArrayCreateExpression");
             EndNode(arrayCreateExpression);
         }
 
@@ -865,11 +864,19 @@ namespace ICSharpCode.ILSpy
         public void VisitAssignmentExpression(AssignmentExpression assignmentExpression)
         {
             StartNode(assignmentExpression);
+            WriteElementStart("AssignmentExpression"); WriteTagEnd();
+            WriteElementStart("Left"); WriteTagEnd();
             assignmentExpression.Left.AcceptVisitor(this);
-            Space(policy.SpaceAroundAssignment);
+            WriteElementEnd("Left");
+            //Space(policy.SpaceAroundAssignment);
+            WriteElementStart("Operator"); WriteTagEnd();
             WriteToken(AssignmentExpression.GetOperatorRole(assignmentExpression.Operator));
-            Space(policy.SpaceAroundAssignment);
+            WriteElementEnd("Operator");
+            //Space(policy.SpaceAroundAssignment);
+            WriteElementStart("Right"); WriteTagEnd();
             assignmentExpression.Right.AcceptVisitor(this);
+            WriteElementEnd("Right");
+            WriteElementEnd("AssignmentExpression");
             EndNode(assignmentExpression);
         }
 
@@ -935,13 +942,19 @@ namespace ICSharpCode.ILSpy
         public void VisitCastExpression(CastExpression castExpression)
         {
             StartNode(castExpression);
-            LPar();
-            Space(policy.SpacesWithinCastParentheses);
+            WriteElementStart("CastExpression");
+            //LPar();
+            //Space(policy.SpacesWithinCastParentheses);
+            WritePropertyStart("Type");
             castExpression.Type.AcceptVisitor(this);
-            Space(policy.SpacesWithinCastParentheses);
-            RPar();
-            Space(policy.SpaceAfterTypecast);
+            WritePropertyEnd();
+            //Space(policy.SpacesWithinCastParentheses);
+            //RPar();
+            //Space(policy.SpaceAfterTypecast);\
+            WriteTagEnd();
+            WriteElementStart("Expression"); WriteTagEnd();
             castExpression.Expression.AcceptVisitor(this);
+            WriteElementEnd("CastExpression");
             EndNode(castExpression);
         }
 
@@ -1084,10 +1097,16 @@ namespace ICSharpCode.ILSpy
         public void VisitMemberReferenceExpression(MemberReferenceExpression memberReferenceExpression)
         {
             StartNode(memberReferenceExpression);
+            WriteElementStart("MemberReferenceExpression");
+            WritePropertyStart("Target");
             memberReferenceExpression.Target.AcceptVisitor(this);
-            WriteToken(Roles.Dot);
+            WritePropertyEnd();
+            //WriteToken(Roles.Dot);
+            WritePropertyStart("MemberName");
             WriteIdentifier(memberReferenceExpression.MemberName);
             WriteTypeArguments(memberReferenceExpression.TypeArguments);
+            WritePropertyEnd();
+            WriteElementTail();
             EndNode(memberReferenceExpression);
         }
 
@@ -1494,6 +1513,7 @@ namespace ICSharpCode.ILSpy
         #region Query Expressions
         public void VisitQueryExpression(QueryExpression queryExpression)
         {
+            //UNUSED
             StartNode(queryExpression);
             bool indent = !(queryExpression.Parent is QueryContinuationClause);
             if (indent)
@@ -1526,6 +1546,7 @@ namespace ICSharpCode.ILSpy
 
         public void VisitQueryContinuationClause(QueryContinuationClause queryContinuationClause)
         {
+            //UNUSED
             StartNode(queryContinuationClause);
             queryContinuationClause.PrecedingQuery.AcceptVisitor(this);
             Space();
@@ -1537,6 +1558,7 @@ namespace ICSharpCode.ILSpy
 
         public void VisitQueryFromClause(QueryFromClause queryFromClause)
         {
+            //UNUSED
             StartNode(queryFromClause);
             WriteKeyword(QueryFromClause.FromKeywordRole);
             queryFromClause.Type.AcceptVisitor(this);
@@ -1551,6 +1573,7 @@ namespace ICSharpCode.ILSpy
 
         public void VisitQueryLetClause(QueryLetClause queryLetClause)
         {
+            //UNUSED
             StartNode(queryLetClause);
             WriteKeyword(QueryLetClause.LetKeywordRole);
             Space();
@@ -1564,6 +1587,7 @@ namespace ICSharpCode.ILSpy
 
         public void VisitQueryWhereClause(QueryWhereClause queryWhereClause)
         {
+            //UNUSED
             StartNode(queryWhereClause);
             WriteKeyword(QueryWhereClause.WhereKeywordRole);
             Space();
@@ -1573,6 +1597,7 @@ namespace ICSharpCode.ILSpy
 
         public void VisitQueryJoinClause(QueryJoinClause queryJoinClause)
         {
+            //UNUSED
             StartNode(queryJoinClause);
             WriteKeyword(QueryJoinClause.JoinKeywordRole);
             queryJoinClause.Type.AcceptVisitor(this);
@@ -1601,6 +1626,7 @@ namespace ICSharpCode.ILSpy
 
         public void VisitQueryOrderClause(QueryOrderClause queryOrderClause)
         {
+            //UNUSED
             StartNode(queryOrderClause);
             WriteKeyword(QueryOrderClause.OrderbyKeywordRole);
             Space();
@@ -1610,6 +1636,7 @@ namespace ICSharpCode.ILSpy
 
         public void VisitQueryOrdering(QueryOrdering queryOrdering)
         {
+            //UNUSED
             StartNode(queryOrdering);
             queryOrdering.Expression.AcceptVisitor(this);
             switch (queryOrdering.Direction)
@@ -1628,6 +1655,7 @@ namespace ICSharpCode.ILSpy
 
         public void VisitQuerySelectClause(QuerySelectClause querySelectClause)
         {
+            //UNUSED
             StartNode(querySelectClause);
             WriteKeyword(QuerySelectClause.SelectKeywordRole);
             Space();
@@ -1637,6 +1665,7 @@ namespace ICSharpCode.ILSpy
 
         public void VisitQueryGroupClause(QueryGroupClause queryGroupClause)
         {
+            //UNUSED
             StartNode(queryGroupClause);
             WriteKeyword(QueryGroupClause.GroupKeywordRole);
             Space();
@@ -1879,7 +1908,7 @@ namespace ICSharpCode.ILSpy
         public void VisitBlockStatement(BlockStatement blockStatement)
         {
             StartNode(blockStatement);
-            BraceStyle style;
+            /*BraceStyle style;
             if (blockStatement.Parent is AnonymousMethodExpression || blockStatement.Parent is LambdaExpression)
             {
                 style = policy.AnonymousMethodBraceStyle;
@@ -1923,12 +1952,14 @@ namespace ICSharpCode.ILSpy
             {
                 style = policy.StatementBraceStyle;
             }
-            OpenBrace(style);
+            OpenBrace(style);*/
+            WriteElementStart("BlockStatement"); WriteTagEnd();
             foreach (var node in blockStatement.Statements)
             {
                 node.AcceptVisitor(this);
             }
-            CloseBrace(style);
+            WriteElementEnd("BlockStatement");
+            //CloseBrace(style);
             if (!(blockStatement.Parent is Expression))
                 NewLine();
             EndNode(blockStatement);
@@ -1937,62 +1968,78 @@ namespace ICSharpCode.ILSpy
         public void VisitBreakStatement(BreakStatement breakStatement)
         {
             StartNode(breakStatement);
-            WriteKeyword("break");
-            Semicolon();
+            WriteElementStart("BreakStatement"); WriteTagEnd();
+            //WriteKeyword("break");
+            //Semicolon();
+            WriteElementEnd("BreakStatement");
             EndNode(breakStatement);
         }
 
         public void VisitCheckedStatement(CheckedStatement checkedStatement)
         {
             StartNode(checkedStatement);
-            WriteKeyword(CheckedStatement.CheckedKeywordRole);
+            //WriteKeyword(CheckedStatement.CheckedKeywordRole);
+            WriteElementStart("CheckedStatement"); WriteTagEnd();
             checkedStatement.Body.AcceptVisitor(this);
+            WriteElementEnd("CheckedStatement");
             EndNode(checkedStatement);
         }
 
         public void VisitContinueStatement(ContinueStatement continueStatement)
         {
             StartNode(continueStatement);
-            WriteKeyword("continue");
-            Semicolon();
+            WriteElementStart("ContinueStatement"); WriteTagEnd();
+            // WriteKeyword("continue");
+            // Semicolon();
+            WriteElementEnd("ContinueStatement");
             EndNode(continueStatement);
         }
 
         public void VisitDoWhileStatement(DoWhileStatement doWhileStatement)
         {
             StartNode(doWhileStatement);
-            WriteKeyword(DoWhileStatement.DoKeywordRole);
+            WriteElementStart("DoWhileStatement"); WriteTagEnd();
+            WriteElementStart("do"); WriteTagEnd();
+            //WriteKeyword(DoWhileStatement.DoKeywordRole);
             WriteEmbeddedStatement(doWhileStatement.EmbeddedStatement);
-            WriteKeyword(DoWhileStatement.WhileKeywordRole);
-            Space(policy.SpaceBeforeWhileParentheses);
-            LPar();
-            Space(policy.SpacesWithinWhileParentheses);
+            WriteElementEnd("do");
+            WriteElementStart("while"); WriteTagEnd();
+            //WriteKeyword(DoWhileStatement.WhileKeywordRole);
+            //Space(policy.SpaceBeforeWhileParentheses);
+            //LPar();
+            //Space(policy.SpacesWithinWhileParentheses);
             doWhileStatement.Condition.AcceptVisitor(this);
-            Space(policy.SpacesWithinWhileParentheses);
-            RPar();
-            Semicolon();
+            WriteElementEnd("while");
+            //Space(policy.SpacesWithinWhileParentheses);
+            //RPar();
+            //Semicolon();
+            WriteElementEnd("DoWhileStatement");
             EndNode(doWhileStatement);
         }
 
         public void VisitEmptyStatement(EmptyStatement emptyStatement)
         {
             StartNode(emptyStatement);
-            Semicolon();
+            WriteElementStart("EmptyStatement"); WriteElementTail();
+            //Semicolon();
             EndNode(emptyStatement);
         }
 
         public void VisitExpressionStatement(ExpressionStatement expressionStatement)
         {
             StartNode(expressionStatement);
+            WriteElementStart("ExpressionStatement"); WriteTagEnd();
             expressionStatement.Expression.AcceptVisitor(this);
-            Semicolon();
+            WriteElementEnd("ExpressionStatement");
+            //Semicolon();
             EndNode(expressionStatement);
         }
 
         public void VisitFixedStatement(FixedStatement fixedStatement)
         {
+            //USED IN ANONYMOUS CLASS, SO NO USEFUL
             StartNode(fixedStatement);
-            WriteKeyword(FixedStatement.FixedKeywordRole);
+            /*WriteKeyword(FixedStatement.FixedKeywordRole);
             Space(policy.SpaceBeforeUsingParentheses);
             LPar();
             Space(policy.SpacesWithinUsingParentheses);
@@ -2001,26 +2048,38 @@ namespace ICSharpCode.ILSpy
             WriteCommaSeparatedList(fixedStatement.Variables);
             Space(policy.SpacesWithinUsingParentheses);
             RPar();
-            WriteEmbeddedStatement(fixedStatement.EmbeddedStatement);
+            WriteEmbeddedStatement(fixedStatement.EmbeddedStatement);*/
             EndNode(fixedStatement);
         }
 
         public void VisitForeachStatement(ForeachStatement foreachStatement)
         {
             StartNode(foreachStatement);
-            WriteKeyword(ForeachStatement.ForeachKeywordRole);
-            Space(policy.SpaceBeforeForeachParentheses);
-            LPar();
-            Space(policy.SpacesWithinForeachParentheses);
+            WriteElementStart("ForeachStatement");
+            //WriteKeyword(ForeachStatement.ForeachKeywordRole);
+            //Space(policy.SpaceBeforeForeachParentheses);
+            //LPar();
+            //Space(policy.SpacesWithinForeachParentheses);
+            WritePropertyStart("VariableType");
             foreachStatement.VariableType.AcceptVisitor(this);
-            Space();
+            WritePropertyEnd();
+            //Space();
+            WritePropertyStart("VariableName");
             foreachStatement.VariableNameToken.AcceptVisitor(this);
-            WriteKeyword(ForeachStatement.InKeywordRole);
-            Space();
+            WritePropertyEnd();
+            WriteTagEnd();
+
+            WriteElementStart("in"); WriteTagEnd();
+            //WriteKeyword(ForeachStatement.InKeywordRole);
+            //Space();
             foreachStatement.InExpression.AcceptVisitor(this);
-            Space(policy.SpacesWithinForeachParentheses);
-            RPar();
+            WriteElementEnd("in");
+            //Space(policy.SpacesWithinForeachParentheses);
+            //RPar();
+            WriteElementStart("Body"); WriteTagEnd();
             WriteEmbeddedStatement(foreachStatement.EmbeddedStatement);
+            WriteElementEnd("Body");
+            WriteElementEnd("ForeachStatement");
             EndNode(foreachStatement);
         }
 
@@ -2084,19 +2143,27 @@ namespace ICSharpCode.ILSpy
         public void VisitIfElseStatement(IfElseStatement ifElseStatement)
         {
             StartNode(ifElseStatement);
-            WriteKeyword(IfElseStatement.IfKeywordRole);
-            Space(policy.SpaceBeforeIfParentheses);
-            LPar();
-            Space(policy.SpacesWithinIfParentheses);
+            WriteElementStart("IfElseStatement"); WriteTagEnd();
+            //WriteKeyword(IfElseStatement.IfKeywordRole);
+            //Space(policy.SpaceBeforeIfParentheses);
+            //LPar();
+            //Space(policy.SpacesWithinIfParentheses);
+            WriteElementStart("if"); WriteTagEnd();
             ifElseStatement.Condition.AcceptVisitor(this);
-            Space(policy.SpacesWithinIfParentheses);
-            RPar();
+            WriteElementEnd("if");
+            //Space(policy.SpacesWithinIfParentheses);
+            //RPar();
+            WriteElementStart("BODY"); WriteTagEnd();
             WriteEmbeddedStatement(ifElseStatement.TrueStatement);
+            WriteElementEnd("BODY");
             if (!ifElseStatement.FalseStatement.IsNull)
             {
-                WriteKeyword(IfElseStatement.ElseKeywordRole);
+                WriteElementStart("else"); WriteTagEnd();
+                //WriteKeyword(IfElseStatement.ElseKeywordRole);
                 WriteEmbeddedStatement(ifElseStatement.FalseStatement);
+                WriteElementEnd("else");
             }
+            WriteElementEnd("IfElseStatement");
             EndNode(ifElseStatement);
         }
 
@@ -2285,6 +2352,7 @@ namespace ICSharpCode.ILSpy
 
         public void VisitUncheckedStatement(UncheckedStatement uncheckedStatement)
         {
+            //UNUSED
             StartNode(uncheckedStatement);
             WriteKeyword(UncheckedStatement.UncheckedKeywordRole);
             uncheckedStatement.Body.AcceptVisitor(this);
@@ -2293,6 +2361,7 @@ namespace ICSharpCode.ILSpy
 
         public void VisitUnsafeStatement(UnsafeStatement unsafeStatement)
         {
+            //UNUSED
             StartNode(unsafeStatement);
             WriteKeyword(UnsafeStatement.UnsafeKeywordRole);
             unsafeStatement.Body.AcceptVisitor(this);
@@ -2344,6 +2413,7 @@ namespace ICSharpCode.ILSpy
 
         public void VisitYieldBreakStatement(YieldBreakStatement yieldBreakStatement)
         {
+            //UNUSED
             StartNode(yieldBreakStatement);
             WriteKeyword(YieldBreakStatement.YieldKeywordRole);
             WriteKeyword(YieldBreakStatement.BreakKeywordRole);
@@ -2353,6 +2423,7 @@ namespace ICSharpCode.ILSpy
 
         public void VisitYieldReturnStatement(YieldReturnStatement yieldReturnStatement)
         {
+            //UNUSED
             StartNode(yieldReturnStatement);
             WriteKeyword(YieldReturnStatement.YieldKeywordRole);
             WriteKeyword(YieldReturnStatement.ReturnKeywordRole);
@@ -2397,12 +2468,14 @@ namespace ICSharpCode.ILSpy
                 WritePropertyEnd();
             }
             WriteTagEnd();
+            
             if (!accessor.Body.IsNull)
             {
                 WriteCDataStart();
                 WriteMethodBody(accessor.Body);
                 WriteCDataEnd();
             }
+
             if (accessor.Role == PropertyDeclaration.GetterRole)
             {
                 WriteElementEnd("get");
@@ -2479,6 +2552,7 @@ namespace ICSharpCode.ILSpy
 
         public void VisitConstructorInitializer(ConstructorInitializer constructorInitializer)
         {
+            //UNUSED
             StartNode(constructorInitializer);
             WriteToken(Roles.Colon);
             Space();
@@ -2695,6 +2769,7 @@ namespace ICSharpCode.ILSpy
 
         public void VisitFixedFieldDeclaration(FixedFieldDeclaration fixedFieldDeclaration)
         {
+            //UNUSED
             StartNode(fixedFieldDeclaration);
             WriteElementStart("fixedField");
             if (fixedFieldDeclaration.Attributes.Count() > 0)
@@ -2724,6 +2799,7 @@ namespace ICSharpCode.ILSpy
 
         public void VisitFixedVariableInitializer(FixedVariableInitializer fixedVariableInitializer)
         {
+            //UNUSED
             StartNode(fixedVariableInitializer);
             fixedVariableInitializer.NameToken.AcceptVisitor(this);
             if (!fixedVariableInitializer.CountExpression.IsNull)
