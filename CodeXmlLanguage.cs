@@ -34,6 +34,7 @@ using ICSharpCode.ILSpy.Options;
 using ICSharpCode.ILSpy.XmlDoc;
 using ICSharpCode.NRefactory.CSharp;
 using Mono.Cecil;
+using System.Text;
 
 namespace ICSharpCode.ILSpy
 {
@@ -217,13 +218,47 @@ namespace ICSharpCode.ILSpy
             GenerateCode(astBuilder, output);
         }
 
+        XmlElement MakeTreeNode(AstNode node, XmlDocument dom)
+        {
+            //string node_role = node.Role.ToString().Replace("?", "__quote__");
+            XmlElement element = dom.CreateElement(node.GetType().Name);
+            element.SetAttribute("Role", node.Role.ToString());
+            element.SetAttribute("Text", node.GetText());
+            //t.Tag = node;
+            foreach (AstNode child in node.Children)
+            {
+                element.AppendChild(MakeTreeNode(child, dom));
+                //t.AppendChild(MakeTreeNode(child, dom));
+            }
+            return element;
+        }
+
+        public void VisitSyntaxTree(SyntaxTree syntaxTree, XmlDocument dom)
+        {
+            // don't do node tracking as we visit all children directly
+            var root = dom.CreateElement("Code");
+            dom.AppendChild(root);
+            foreach (AstNode node in syntaxTree.Children)
+            {
+                root.AppendChild(MakeTreeNode(node, dom));
+                //node.AcceptVisitor(this);
+            }
+        }
+
         void GenerateCode(AstBuilder astBuilder, ITextOutput output)
         {
             var syntaxTree = astBuilder.SyntaxTree;
             syntaxTree.AcceptVisitor(new InsertParenthesesVisitor { InsertParenthesesForReadability = true });
-            var outputFormatter = new TextOutputFormatter(output) { FoldBraces = true };
-            var formattingPolicy = FormattingOptionsFactory.CreateAllman();
-            syntaxTree.AcceptVisitor(new CodeXmlOutputVisitor(outputFormatter, formattingPolicy));
+            //var outputFormatter = new TextOutputFormatter(output) { FoldBraces = true };
+            //var formattingPolicy = FormattingOptionsFactory.CreateAllman();
+            //syntaxTree.AcceptVisitor(new CodeXmlOutputVisitor(outputFormatter, formattingPolicy));
+            //syntaxTree.AcceptVisitor(new DomOutputVisitor(output));
+            var dom = new XmlDocument();
+            VisitSyntaxTree(syntaxTree, dom);
+            var text = new StringWriter();
+            var writer = new XmlTextWriter(text) { Formatting = Formatting.Indented };
+            dom.WriteContentTo(writer);
+            output.Write(text.ToString());
         }
 
         public static string GetPlatformDisplayName(ModuleDefinition module)

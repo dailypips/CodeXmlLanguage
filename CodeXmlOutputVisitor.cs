@@ -35,6 +35,7 @@ namespace ICSharpCode.ILSpy
     /// </summary>
     public class CodeXmlOutputVisitor : IAstVisitor
     {
+        #region Constructor
         readonly IOutputFormatter formatter;
         readonly CSharpFormattingOptions policy;
         readonly Stack<AstNode> containerStack = new Stack<AstNode>();
@@ -86,6 +87,7 @@ namespace ICSharpCode.ILSpy
             this.formatter = formatter;
             this.policy = formattingPolicy;
         }
+        #endregion
 
         #region StartNode/EndNode
         void StartNode(AstNode node)
@@ -3085,6 +3087,7 @@ namespace ICSharpCode.ILSpy
             //formatter.WriteComment(CommentType.InactiveCode, "<?xml version=\"1.0\" encoding=\"UTF-8\"?>");
             //NewLine();
             // don't do node tracking as we visit all children directly
+            formatter.WriteComment(CommentType.SingleLine, syntaxTree.FileName);
             foreach (AstNode node in syntaxTree.Children)
             {
                 node.AcceptVisitor(this);
@@ -3235,6 +3238,7 @@ namespace ICSharpCode.ILSpy
             EndNode(constraint);
         }
 
+        /* RealName is VisitModifierToken */
         public void VisitCSharpTokenNode(CSharpTokenNode cSharpTokenNode)
         {
             CSharpModifierToken mod = cSharpTokenNode as CSharpModifierToken;
