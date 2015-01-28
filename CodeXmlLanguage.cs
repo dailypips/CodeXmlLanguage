@@ -135,22 +135,42 @@ namespace ICSharpCode.ILSpy
 
         class LicenseCtorRemoveTransform : IAstTransform
         {
-            public void Run(AstNode compilationUnit)
+            public void Run(AstNode node)
             {
-                  foreach (var node in compilationUnit.Children)
+                ConstructorDeclaration ctor = node as ConstructorDeclaration;
+                if (ctor != null)
                 {
-                    ConstructorDeclaration ctor = node as ConstructorDeclaration;
-                    if (ctor != null)
+                    Console.WriteLine(ctor.Name);
+                    if (ctor.HasModifier(Modifiers.Static))
                     {
-                        Console.WriteLine(ctor.Name);
-                        if (ctor.HasModifier(Modifiers.Static))
-                        {
-                            ctor.Remove();
-                        }
+                        ctor.Remove();
                     }
                 }
             }
         }
+
+        class DepthFirstTransform : IAstTransform
+        {
+            IAstTransform nodeTransform;
+
+            public DepthFirstTransform(IAstTransform transform)
+            {
+                nodeTransform = transform;
+            }
+
+            public void traveNode(AstNode compilationUnit)
+            {
+                nodeTransform.Run(compilationUnit);
+                foreach(var node in compilationUnit.Children)
+                    traveNode(node);
+            }
+
+            public void Run(AstNode compilationUnit)
+            {
+                traveNode(compilationUnit);
+            }
+        }
+
         public override void DecompileProperty(PropertyDefinition property, ITextOutput output, DecompilationOptions options)
         {
             WriteCommentLine(output, TypeToString(property.DeclaringType, includeNamespace: true));
@@ -273,8 +293,11 @@ namespace ICSharpCode.ILSpy
             // don't do node tracking as we visit all children directly         
             var ast = dom.CreateElement("AST");
             dom.DocumentElement.AppendChild(ast);
+            
             var licenseRemove = new LicenseCtorRemoveTransform();
-            licenseRemove.Run(syntaxTree);
+            var traveNode = new DepthFirstTransform(licenseRemove);
+            traveNode.Run(syntaxTree);
+
             foreach (AstNode node in syntaxTree.Children)
             {
                 ast.AppendChild(MakeTreeNode(node, dom));
