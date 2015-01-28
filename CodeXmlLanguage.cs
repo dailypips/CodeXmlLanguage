@@ -110,7 +110,14 @@ namespace ICSharpCode.ILSpy
                             // remove other ctors
                             ctor.Remove();
                         }
+
+                        if (ctor.HasModifier(Modifiers.Static))
+                        {
+                            ctor.Remove();
+                        }
                     }
+
+                    
                     // Remove any fields without initializers
                     FieldDeclaration fd = node as FieldDeclaration;
                     if (fd != null && fd.Variables.All(v => v.Initializer.IsNull))
@@ -126,6 +133,24 @@ namespace ICSharpCode.ILSpy
             }
         }
 
+        class LicenseCtorRemoveTransform : IAstTransform
+        {
+            public void Run(AstNode compilationUnit)
+            {
+                  foreach (var node in compilationUnit.Children)
+                {
+                    ConstructorDeclaration ctor = node as ConstructorDeclaration;
+                    if (ctor != null)
+                    {
+                        Console.WriteLine(ctor.Name);
+                        if (ctor.HasModifier(Modifiers.Static))
+                        {
+                            ctor.Remove();
+                        }
+                    }
+                }
+            }
+        }
         public override void DecompileProperty(PropertyDefinition property, ITextOutput output, DecompilationOptions options)
         {
             WriteCommentLine(output, TypeToString(property.DeclaringType, includeNamespace: true));
@@ -204,17 +229,27 @@ namespace ICSharpCode.ILSpy
             RunTransformsAndGenerateCode(codeDomBuilder, output, options);
         }
 
-        void RunTransformsAndGenerateCode(AstBuilder astBuilder, ITextOutput output, DecompilationOptions options, IAstTransform additionalTransform = null)
+        void RunTransformsStart(AstBuilder astBuilder)
         {
             astBuilder.RunTransformations(transformAbortCondition);
-            if (additionalTransform != null)
-            {
-                additionalTransform.Run(astBuilder.SyntaxTree);
-            }
+        }
+
+        void RunTransformsEnd(AstBuilder astBuilder, DecompilationOptions options)
+        {
             if (options.DecompilerSettings.ShowXmlDocumentation)
             {
                 AddXmlDocTransform.Run(astBuilder.SyntaxTree);
             }
+        }
+
+        void RunTransformsAndGenerateCode(AstBuilder astBuilder, ITextOutput output, DecompilationOptions options, IAstTransform additionalTransform = null)
+        {
+            RunTransformsStart(astBuilder);
+            if (additionalTransform != null)
+            {
+                additionalTransform.Run(astBuilder.SyntaxTree);
+            }
+            RunTransformsEnd(astBuilder, options);
             GenerateCode(astBuilder, output);
         }
 
@@ -235,12 +270,14 @@ namespace ICSharpCode.ILSpy
 
         public void VisitSyntaxTree(SyntaxTree syntaxTree, XmlDocument dom)
         {
-            // don't do node tracking as we visit all children directly
-            var root = dom.CreateElement("Code");
-            dom.AppendChild(root);
+            // don't do node tracking as we visit all children directly         
+            var ast = dom.CreateElement("AST");
+            dom.DocumentElement.AppendChild(ast);
+            var licenseRemove = new LicenseCtorRemoveTransform();
+            licenseRemove.Run(syntaxTree);
             foreach (AstNode node in syntaxTree.Children)
             {
-                root.AppendChild(MakeTreeNode(node, dom));
+                ast.AppendChild(MakeTreeNode(node, dom));
                 //node.AcceptVisitor(this);
             }
         }
@@ -249,12 +286,28 @@ namespace ICSharpCode.ILSpy
         {
             var syntaxTree = astBuilder.SyntaxTree;
             syntaxTree.AcceptVisitor(new InsertParenthesesVisitor { InsertParenthesesForReadability = true });
-            //var outputFormatter = new TextOutputFormatter(output) { FoldBraces = true };
-            //var formattingPolicy = FormattingOptionsFactory.CreateAllman();
-            //syntaxTree.AcceptVisitor(new CodeXmlOutputVisitor(outputFormatter, formattingPolicy));
-            //syntaxTree.AcceptVisitor(new DomOutputVisitor(output));
+            
+            // Xml
             var dom = new XmlDocument();
+            dom.AppendChild(dom.CreateElement("CodeDom")); // root node
+
+            // generate AST
             VisitSyntaxTree(syntaxTree, dom);
+            
+            //Generate C# Code
+            var csharpText = new StringWriter();
+            var csharpoutput = new PlainTextOutput(csharpText);
+            var outputFormatter = new TextOutputFormatter(csharpoutput) { FoldBraces = true };
+            var formattingPolicy = FormattingOptionsFactory.CreateAllman();
+            syntaxTree.AcceptVisitor(new CSharpOutputVisitor(outputFormatter, formattingPolicy));
+
+            // insert to xml as cdata
+            var csharpcode = dom.CreateElement("Code");
+            var cdata = dom.CreateCDataSection(csharpText.ToString());
+            csharpcode.AppendChild(cdata);
+            dom.DocumentElement.AppendChild(csharpcode);
+
+            // write to output
             var text = new StringWriter();
             var writer = new XmlTextWriter(text) { Formatting = Formatting.Indented };
             dom.WriteContentTo(writer);
