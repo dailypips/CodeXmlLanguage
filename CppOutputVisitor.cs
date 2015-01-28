@@ -1166,7 +1166,7 @@ namespace QuantKit
         public static string PrintPrimitiveValue(object val)
         {
             StringWriter writer = new StringWriter();
-            TsOutputVisitor visitor = new CppOutputVisitor(writer, new CSharpFormattingOptions());
+            var visitor = new CppOutputVisitor(writer, new CSharpFormattingOptions());
             visitor.WritePrimitiveValue(val);
             return writer.ToString();
         }
@@ -1714,7 +1714,7 @@ namespace QuantKit
             if (typeDeclaration.BaseTypes.Any())
             {
 
-                var bs = typeDeclaration.BaseTypes.FirstOrDefault(x => !CsToTs.IsInterface(x));
+                var bs = typeDeclaration.BaseTypes.FirstOrDefault(x => !CSharpToCpp.IsInterface(x));
 
                 if (bs != null)
                 {
@@ -1724,7 +1724,7 @@ namespace QuantKit
                     bs.AcceptVisitor(this);
                 }
 
-                var ints = typeDeclaration.BaseTypes.Where(CsToTs.IsInterface).ToList();
+                var ints = typeDeclaration.BaseTypes.Where(CSharpToCpp.IsInterface).ToList();
 
                 if (ints.Count > 0)
                 {
