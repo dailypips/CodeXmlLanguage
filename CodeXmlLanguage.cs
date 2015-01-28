@@ -140,7 +140,6 @@ namespace ICSharpCode.ILSpy
                 ConstructorDeclaration ctor = node as ConstructorDeclaration;
                 if (ctor != null)
                 {
-                    Console.WriteLine(ctor.Name);
                     if (ctor.HasModifier(Modifiers.Static))
                     {
                         ctor.Remove();
@@ -149,20 +148,48 @@ namespace ICSharpCode.ILSpy
             }
         }
 
+        class RemoveCompilerGenerateField : IAstTransform
+        {
+            public void Run(AstNode node)
+            {
+                FieldDeclaration field = node as FieldDeclaration;
+                if (field != null)
+                {
+                    bool isCompilerGenerated = false;
+                    foreach (AttributeSection section in field.Attributes) {
+                        foreach (ICSharpCode.NRefactory.CSharp.Attribute attr in section.Attributes)
+                        {
+                            if (attr.GetText() == "CompilerGenerated")
+                            {
+                                isCompilerGenerated = true;
+                                break;
+                            }
+                        }
+                    }
+                    if (isCompilerGenerated)
+                        field.Remove();
+                }
+            }
+        }
+
         class DepthFirstTransform : IAstTransform
         {
-            IAstTransform nodeTransform;
-
-            public DepthFirstTransform(IAstTransform transform)
-            {
-                nodeTransform = transform;
-            }
+            List<IAstTransform> transforms = new List<IAstTransform>();
 
             public void traveNode(AstNode compilationUnit)
             {
-                nodeTransform.Run(compilationUnit);
+                foreach (IAstTransform item in transforms)
+                {
+                    item.Run(compilationUnit);
+                }
+
                 foreach(var node in compilationUnit.Children)
                     traveNode(node);
+            }
+
+            public void Add(IAstTransform trans)
+            {
+                transforms.Add(trans);
             }
 
             public void Run(AstNode compilationUnit)
@@ -294,8 +321,10 @@ namespace ICSharpCode.ILSpy
             var ast = dom.CreateElement("AST");
             dom.DocumentElement.AppendChild(ast);
             
-            var licenseRemove = new LicenseCtorRemoveTransform();
-            var traveNode = new DepthFirstTransform(licenseRemove);
+            var traveNode = new DepthFirstTransform();
+            traveNode.Add(new LicenseCtorRemoveTransform());
+            traveNode.Add(new RemoveCompilerGenerateField());
+
             traveNode.Run(syntaxTree);
 
             foreach (AstNode node in syntaxTree.Children)
