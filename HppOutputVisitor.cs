@@ -2375,8 +2375,8 @@ namespace QuantKit
                 return;
 
             StartNode(fieldDeclaration);
-            WriteAttributes(fieldDeclaration.Attributes);
-            WriteModifiers(fieldDeclaration.ModifierTokens);
+            //WriteAttributes(fieldDeclaration.Attributes);
+            WriteModifiers(fieldDeclaration.ModifierTokens); Space();
             fieldDeclaration.ReturnType.AcceptVisitor(this);
             Space();
             WriteCommaSeparatedList(fieldDeclaration.Variables);
@@ -2535,13 +2535,56 @@ namespace QuantKit
         public void VisitPropertyDeclaration(PropertyDeclaration propertyDeclaration)
         {
             StartNode(propertyDeclaration);
-            WriteAttributes(propertyDeclaration.Attributes);
-            WriteModifiers(propertyDeclaration.ModifierTokens);
-            propertyDeclaration.ReturnType.AcceptVisitor(this);
-            Space();
-            WritePrivateImplementationType(propertyDeclaration.PrivateImplementationType);
-            propertyDeclaration.NameToken.AcceptVisitor(this);
-            OpenBrace(policy.PropertyBraceStyle);
+            //WriteAttributes(propertyDeclaration.Attributes);
+            //WriteModifiers(propertyDeclaration.ModifierTokens);
+            
+            var getter = propertyDeclaration.Getter;
+            if (!getter.IsNull && !(getter.HasModifier(Modifiers.Private) || getter.HasModifier(Modifiers.Internal)))
+            {
+                propertyDeclaration.ReturnType.AcceptVisitor(this);
+                Space();
+                formatter.WriteIdentifier("get");
+                propertyDeclaration.NameToken.AcceptVisitor(this);
+                LPar(); RPar();
+                Semicolon(); NewLine();
+            }
+
+            var setter = propertyDeclaration.Setter;
+            if (!setter.IsNull && !(setter.HasModifier(Modifiers.Private) || setter.HasModifier(Modifiers.Internal)))
+            {
+                propertyDeclaration.ReturnType.AcceptVisitor(this);
+                Space();
+                formatter.WriteIdentifier("set");
+                propertyDeclaration.NameToken.AcceptVisitor(this);
+                LPar();
+                if (propertyDeclaration.ReturnType is PrimitiveType)
+                {
+                    var rtype = propertyDeclaration.ReturnType as PrimitiveType;
+                    if (rtype.Keyword == "string")
+                    {
+                        WriteKeyword("const QString& value");
+                    }
+                    else
+                    {
+                        propertyDeclaration.ReturnType.AcceptVisitor(this);
+                        Space();
+                        WriteIdentifier("value");
+                    }
+                }
+                else
+                {
+                    WriteKeyword("const");
+                    propertyDeclaration.ReturnType.AcceptVisitor(this);
+                    formatter.WriteIdentifier("&");
+                    Space();
+                    WriteIdentifier("value");
+                }
+                RPar();
+                Semicolon(); NewLine();
+            }
+            //WritePrivateImplementationType(propertyDeclaration.PrivateImplementationType);
+            //propertyDeclaration.NameToken.AcceptVisitor(this);
+            /*OpenBrace(policy.PropertyBraceStyle);
             // output get/set in their original order
             foreach (AstNode node in propertyDeclaration.Children)
             {
@@ -2550,8 +2593,8 @@ namespace QuantKit
                     node.AcceptVisitor(this);
                 }
             }
-            CloseBrace(policy.PropertyBraceStyle);
-            NewLine();
+            CloseBrace(policy.PropertyBraceStyle);*/
+            //NewLine();
             EndNode(propertyDeclaration);
         }
 
@@ -2584,7 +2627,10 @@ namespace QuantKit
         public void VisitSimpleType(SimpleType simpleType)
         {
             StartNode(simpleType);
-            WriteIdentifier(simpleType.Identifier);
+            if (simpleType.Identifier == "DateTime")
+                WriteIdentifier("QDateTime");
+            else
+                WriteIdentifier(simpleType.Identifier);
             WriteTypeArguments(simpleType.TypeArguments);
             EndNode(simpleType);
         }
@@ -2642,12 +2688,23 @@ namespace QuantKit
         public void VisitPrimitiveType(PrimitiveType primitiveType)
         {
             StartNode(primitiveType);
-            WriteKeyword(primitiveType.Keyword);
-            if (primitiveType.Keyword == "new")
+            switch (primitiveType.Keyword)
             {
-                // new() constraint
-                LPar();
-                RPar();
+                case "byte":
+                    formatter.WriteKeyword("unsigned char");
+                    break;
+                case "string":
+                    formatter.WriteKeyword("QString");
+                    break;
+                default:
+                    WriteKeyword(primitiveType.Keyword);
+                    if (primitiveType.Keyword == "new")
+                    {
+                        // new() constraint
+                        LPar();
+                        RPar();
+                    }
+                    break;
             }
             EndNode(primitiveType);
         }
