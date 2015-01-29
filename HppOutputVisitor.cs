@@ -1,17 +1,20 @@
-﻿// Copyright 2015 Xiaojun Gao
+﻿// Copyright (c) AlphaSierraPapa for the SharpDevelop Team
 // 
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
+// Permission is hereby granted, free of charge, to any person obtaining a copy of this
+// software and associated documentation files (the "Software"), to deal in the Software
+// without restriction, including without limitation the rights to use, copy, modify, merge,
+// publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons
+// to whom the Software is furnished to do so, subject to the following conditions:
 // 
-//    http://www.apache.org/licenses/LICENSE-2.0
+// The above copyright notice and this permission notice shall be included in all copies or
+// substantial portions of the Software.
 // 
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+// INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR
+// PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE
+// FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+// OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+// DEALINGS IN THE SOFTWARE.
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -28,9 +31,9 @@ using ICSharpCode.NRefactory;
 namespace QuantKit
 {
     /// <summary>
-    /// Outputs the AST as TypeScript.
+    /// Outputs the AST.
     /// </summary>
-    public class CppOutputVisitor : IAstVisitor
+    public class HppOutputVisitor : IAstVisitor
     {
         readonly IOutputFormatter formatter;
         readonly CSharpFormattingOptions policy;
@@ -54,7 +57,7 @@ namespace QuantKit
             Division
         }
 
-        public CppOutputVisitor(TextWriter textWriter, CSharpFormattingOptions formattingPolicy)
+        public HppOutputVisitor(TextWriter textWriter, CSharpFormattingOptions formattingPolicy)
         {
             if (textWriter == null)
             {
@@ -68,7 +71,7 @@ namespace QuantKit
             this.policy = formattingPolicy;
         }
 
-        public CppOutputVisitor(IOutputFormatter formatter, CSharpFormattingOptions formattingPolicy)
+        public HppOutputVisitor(IOutputFormatter formatter, CSharpFormattingOptions formattingPolicy)
         {
             if (formatter == null)
             {
@@ -229,7 +232,7 @@ namespace QuantKit
             }
         }
 
-        void WriteCommaSeparatedList(IEnumerable<AstNode> list, Action<AstNode> ext = null)
+        void WriteCommaSeparatedList(IEnumerable<AstNode> list)
         {
             bool isFirst = true;
             foreach (AstNode node in list)
@@ -243,45 +246,20 @@ namespace QuantKit
                     Comma(node);
                 }
                 node.AcceptVisitor(this);
-                if (ext != null)
-                    ext(node);
             }
         }
 
-        void WriteCommaSeparatedListInParenthesis(IEnumerable<AstNode> list, bool spaceWithin, Action<AstNode> ext = null)
+        void WriteCommaSeparatedListInParenthesis(IEnumerable<AstNode> list, bool spaceWithin)
         {
             LPar();
             if (list.Any())
             {
                 Space(spaceWithin);
-                WriteCommaSeparatedList(list, ext);
+                WriteCommaSeparatedList(list);
                 Space(spaceWithin);
             }
             RPar();
         }
-
-#if DOTNET35
-		void WriteCommaSeparatedList(IEnumerable<VariableInitializer> list)
-		{
-		WriteCommaSeparatedList(list.SafeCast<VariableInitializer, AstNode>());
-		}
-
-		void WriteCommaSeparatedList(IEnumerable<AstType> list)
-		{
-		WriteCommaSeparatedList(list.SafeCast<AstType, AstNode>());
-		}
-
-		void WriteCommaSeparatedListInParenthesis(IEnumerable<Expression> list, bool spaceWithin)
-		{
-		WriteCommaSeparatedListInParenthesis(list.SafeCast<Expression, AstNode>(), spaceWithin);
-		}
-
-		void WriteCommaSeparatedListInParenthesis(IEnumerable<ParameterDeclaration> list, bool spaceWithin)
-		{
-		WriteCommaSeparatedListInParenthesis(list.SafeCast<ParameterDeclaration, AstNode>(), spaceWithin);
-		}
-
-#endif
 
         void WriteCommaSeparatedListInBrackets(IEnumerable<ParameterDeclaration> list, bool spaceWithin)
         {
@@ -332,13 +310,13 @@ namespace QuantKit
         }
 
         /*		void WriteKeyword (string keyword, Role tokenRole)
-        {
-            WriteSpecialsUpToRole (tokenRole);
-            if (lastWritten == LastWritten.KeywordOrIdentifier)
-                formatter.Space ();
-            formatter.WriteKeyword (keyword);
-            lastWritten = LastWritten.KeywordOrIdentifier;
-        }*/
+                {
+                    WriteSpecialsUpToRole (tokenRole);
+                    if (lastWritten == LastWritten.KeywordOrIdentifier)
+                        formatter.Space ();
+                    formatter.WriteKeyword (keyword);
+                    lastWritten = LastWritten.KeywordOrIdentifier;
+                }*/
 
         void WriteIdentifier(string identifier, Role<Identifier> identifierRole = null)
         {
@@ -350,7 +328,7 @@ namespace QuantKit
                     Space();
                 }
                 // this space is not strictly required, so we call Space()
-                formatter.WriteToken("$");
+                formatter.WriteToken("@");
             }
             else if (lastWritten == LastWritten.KeywordOrIdentifier)
             {
@@ -470,22 +448,21 @@ namespace QuantKit
 
         #region IsKeyword Test
         static readonly HashSet<string> unconditionalKeywords = new HashSet<string> {
-			"super", "boolean", "break", "case", "catch",
-			"class", "const", "continue", "default", "function",
-			"do", "else", "enum", "false",
-			"finally", "for", "goto", "if",
-			"in", "interface", "instanceof", "module",
-			"new", "null", "object", "private",
-			"public", "return",
-			"static", "string", "switch", "this", "throw",
-			"true", "try", "typeof",
-			"using", "void", "while",
-			// closure thinks these are reserved
-			"int", "expression",
+			"abstract", "as", "base", "bool", "break", "byte", "case", "catch",
+			"char", "checked", "class", "const", "continue", "decimal", "default", "delegate",
+			"do", "double", "else", "enum", "event", "explicit", "extern", "false",
+			"finally", "fixed", "float", "for", "foreach", "goto", "if", "implicit",
+			"in", "int", "interface", "internal", "is", "lock", "long", "namespace",
+			"new", "null", "object", "operator", "out", "override", "params", "private",
+			"protected", "public", "readonly", "ref", "return", "sbyte", "sealed", "short",
+			"sizeof", "stackalloc", "static", "string", "struct", "switch", "this", "throw",
+			"true", "try", "typeof", "uint", "ulong", "unchecked", "unsafe", "ushort",
+			"using", "virtual", "void", "volatile", "while"
 		};
-        static readonly HashSet<string> queryKeywords = new HashSet<string>
-        {
-        };
+        static readonly HashSet<string> queryKeywords = new HashSet<string> {
+			"from", "where", "join", "on", "equals", "into", "let", "orderby",
+			"ascending", "descending", "select", "group", "by"
+		};
 
         /// <summary>
         /// Determines whether the specified identifier is a keyword in the given context.
@@ -534,12 +511,12 @@ namespace QuantKit
             }
         }
 
-        public void WriteTypeParameters(IEnumerable<TypeParameterDeclaration> typeParameters, Action<TypeParameterDeclaration> ext = null)
+        public void WriteTypeParameters(IEnumerable<TypeParameterDeclaration> typeParameters)
         {
             if (typeParameters.Any())
             {
                 WriteToken(Roles.LChevron);
-                WriteCommaSeparatedList(typeParameters, n => { if (ext != null) ext((TypeParameterDeclaration)n); });
+                WriteCommaSeparatedList(typeParameters);
                 WriteToken(Roles.RChevron);
             }
         }
@@ -638,10 +615,12 @@ namespace QuantKit
                 WriteKeyword(AnonymousMethodExpression.AsyncModifierRole);
                 Space();
             }
-            //			WriteKeyword("function", AnonymousMethodExpression.DelegateKeywordRole);
-            //			Space(policy.SpaceBeforeMethodDeclarationParentheses);
-            WriteCommaSeparatedListInParenthesis(anonymousMethodExpression.Parameters, policy.SpaceWithinMethodDeclarationParentheses);
-            WriteToken("=>", Roles.Assign);
+            WriteKeyword(AnonymousMethodExpression.DelegateKeywordRole);
+            if (anonymousMethodExpression.HasParameterList)
+            {
+                Space(policy.SpaceBeforeMethodDeclarationParentheses);
+                WriteCommaSeparatedListInParenthesis(anonymousMethodExpression.Parameters, policy.SpaceWithinMethodDeclarationParentheses);
+            }
             anonymousMethodExpression.Body.AcceptVisitor(this);
             EndNode(anonymousMethodExpression);
         }
@@ -676,25 +655,17 @@ namespace QuantKit
         public void VisitArrayCreateExpression(ArrayCreateExpression arrayCreateExpression)
         {
             StartNode(arrayCreateExpression);
-            //			WriteKeyword(ArrayCreateExpression.NewKeywordRole);
-            //			arrayCreateExpression.Type.AcceptVisitor(this);
-
+            WriteKeyword(ArrayCreateExpression.NewKeywordRole);
+            arrayCreateExpression.Type.AcceptVisitor(this);
             if (arrayCreateExpression.Arguments.Count > 0)
             {
-                WriteKeyword("new");
-                WriteIdentifier("Array");
-                WriteToken(Roles.LChevron);
-                arrayCreateExpression.Type.AcceptVisitor(this);
-                WriteToken(Roles.RChevron);
-                LPar();
-                WriteCommaSeparatedList(arrayCreateExpression.Arguments);
-                RPar();
+                WriteCommaSeparatedListInBrackets(arrayCreateExpression.Arguments);
             }
-            //			foreach (var specifier in arrayCreateExpression.AdditionalArraySpecifiers) {
-            //				specifier.AcceptVisitor(this);
-            //			}
+            foreach (var specifier in arrayCreateExpression.AdditionalArraySpecifiers)
+            {
+                specifier.AcceptVisitor(this);
+            }
             arrayCreateExpression.Initializer.AcceptVisitor(this);
-
             EndNode(arrayCreateExpression);
         }
 
@@ -707,15 +678,15 @@ namespace QuantKit
             // The output visitor will output nested braces only if they are necessary,
             // or if the braces tokens exist in the AST.
             bool bracesAreOptional = arrayInitializerExpression.Elements.Count == 1
-                && IsObjectOrCollectionInitializer(arrayInitializerExpression.Parent)
-                && !CanBeConfusedWithObjectInitializer(arrayInitializerExpression.Elements.Single());
+                    && IsObjectOrCollectionInitializer(arrayInitializerExpression.Parent)
+                    && !CanBeConfusedWithObjectInitializer(arrayInitializerExpression.Elements.Single());
             if (bracesAreOptional && arrayInitializerExpression.LBraceToken.IsNull)
             {
                 arrayInitializerExpression.Elements.Single().AcceptVisitor(this);
             }
             else
             {
-                PrintInitializerElements(arrayInitializerExpression.Elements, Roles.LBracket, Roles.RBracket);
+                PrintInitializerElements(arrayInitializerExpression.Elements);
             }
             EndNode(arrayInitializerExpression);
         }
@@ -747,22 +718,16 @@ namespace QuantKit
 
         void PrintInitializerElements(AstNodeCollection<Expression> elements)
         {
-            PrintInitializerElements(elements, Roles.LBrace, Roles.RBrace);
-        }
-
-        void PrintInitializerElements(AstNodeCollection<Expression> elements, TokenRole open, TokenRole close)
-        {
-            //			BraceStyle style;
-            //			if (policy.ArrayInitializerWrapping == Wrapping.WrapAlways) {
-            //				style = BraceStyle.NextLine;
-            //			} else {
-            //				style = BraceStyle.EndOfLine;
-            //			}
-            WriteSpecialsUpToRole(open);
-            WriteToken(open);
-            formatter.Indent();
-            NewLine();
-            var col = 0;
+            BraceStyle style;
+            if (policy.ArrayInitializerWrapping == Wrapping.WrapAlways)
+            {
+                style = BraceStyle.NextLine;
+            }
+            else
+            {
+                style = BraceStyle.EndOfLine;
+            }
+            OpenBrace(style);
             bool isFirst = true;
             foreach (AstNode node in elements)
             {
@@ -773,42 +738,25 @@ namespace QuantKit
                 else
                 {
                     Comma(node, noSpaceAfterComma: true);
-                    Space();
-                }
-                col++;
-                if ((col % 20) == 0)
-                {
                     NewLine();
                 }
                 node.AcceptVisitor(this);
             }
             OptionalComma();
             NewLine();
-            formatter.Unindent();
-            WriteSpecialsUpToRole(close);
-            WriteToken(close);
+            CloseBrace(style);
         }
 
         public void VisitAsExpression(AsExpression asExpression)
         {
             StartNode(asExpression);
-            LPar();
-            LPar();
             asExpression.Expression.AcceptVisitor(this);
             Space();
-            WriteKeyword("instanceof", AsExpression.AsKeywordRole);
+            WriteKeyword(AsExpression.AsKeywordRole);
             Space();
             asExpression.Type.AcceptVisitor(this);
             EndNode(asExpression);
-            RPar();
-            WriteToken("?<", Roles.Expression);
-            asExpression.Type.AcceptVisitor(this);
-            WriteToken(">", Roles.Expression);
-            asExpression.Expression.AcceptVisitor(this);
-            WriteToken(":null", Roles.Expression);
-            RPar();
         }
-
 
         public void VisitAssignmentExpression(AssignmentExpression assignmentExpression)
         {
@@ -824,7 +772,7 @@ namespace QuantKit
         public void VisitBaseReferenceExpression(BaseReferenceExpression baseReferenceExpression)
         {
             StartNode(baseReferenceExpression);
-            WriteKeyword("super", baseReferenceExpression.Role);
+            WriteKeyword("base", baseReferenceExpression.Role);
             EndNode(baseReferenceExpression);
         }
 
@@ -874,22 +822,7 @@ namespace QuantKit
                     throw new NotSupportedException("Invalid value for BinaryOperatorType");
             }
             Space(spacePolicy);
-            if (binaryOperatorExpression.Operator == BinaryOperatorType.Equality)
-            {
-                WriteToken("===", BinaryOperatorExpression.GetOperatorRole(binaryOperatorExpression.Operator));
-            }
-            else if (binaryOperatorExpression.Operator == BinaryOperatorType.InEquality)
-            {
-                WriteToken("!==", BinaryOperatorExpression.GetOperatorRole(binaryOperatorExpression.Operator));
-            }
-            else if (binaryOperatorExpression.Operator == BinaryOperatorType.NullCoalescing)
-            {
-                WriteToken("||", BinaryOperatorExpression.GetOperatorRole(binaryOperatorExpression.Operator));
-            }
-            else
-            {
-                WriteToken(BinaryOperatorExpression.GetOperatorRole(binaryOperatorExpression.Operator));
-            }
+            WriteToken(BinaryOperatorExpression.GetOperatorRole(binaryOperatorExpression.Operator));
             Space(spacePolicy);
             binaryOperatorExpression.Right.AcceptVisitor(this);
             EndNode(binaryOperatorExpression);
@@ -898,11 +831,11 @@ namespace QuantKit
         public void VisitCastExpression(CastExpression castExpression)
         {
             StartNode(castExpression);
-            WriteToken("<", Roles.LPar);
+            LPar();
             Space(policy.SpacesWithinCastParentheses);
             castExpression.Type.AcceptVisitor(this);
             Space(policy.SpacesWithinCastParentheses);
-            WriteToken(">", Roles.LPar);
+            RPar();
             Space(policy.SpaceAfterTypecast);
             castExpression.Expression.AcceptVisitor(this);
             EndNode(castExpression);
@@ -995,15 +928,7 @@ namespace QuantKit
         public void VisitInvocationExpression(InvocationExpression invocationExpression)
         {
             StartNode(invocationExpression);
-            if (invocationExpression.Target is AnonymousMethodExpression)
-            {
-                formatter.WriteToken("(");
-            }
             invocationExpression.Target.AcceptVisitor(this);
-            if (invocationExpression.Target is AnonymousMethodExpression)
-            {
-                formatter.WriteToken(")");
-            }
             Space(policy.SpaceBeforeMethodCallParentheses);
             WriteCommaSeparatedListInParenthesis(invocationExpression.Arguments, policy.SpaceWithinMethodCallParentheses);
             EndNode(invocationExpression);
@@ -1014,7 +939,7 @@ namespace QuantKit
             StartNode(isExpression);
             isExpression.Expression.AcceptVisitor(this);
             Space();
-            WriteKeyword("instanceof", IsExpression.IsKeywordRole);
+            WriteKeyword(IsExpression.IsKeywordRole);
             isExpression.Type.AcceptVisitor(this);
             EndNode(isExpression);
         }
@@ -1027,22 +952,18 @@ namespace QuantKit
                 WriteKeyword(LambdaExpression.AsyncModifierRole);
                 Space();
             }
-            //			WriteKeyword ("function");
-            WriteCommaSeparatedListInParenthesis(lambdaExpression.Parameters, policy.SpaceWithinMethodDeclarationParentheses);
-            WriteToken("=>", Roles.Assign);
-            if (lambdaExpression.Body is BlockStatement)
+            if (LambdaNeedsParenthesis(lambdaExpression))
             {
-                lambdaExpression.Body.AcceptVisitor(this);
+                WriteCommaSeparatedListInParenthesis(lambdaExpression.Parameters, policy.SpaceWithinMethodDeclarationParentheses);
             }
             else
             {
-                WriteToken(Roles.LBrace);
-                WriteKeyword("return");
-                Space();
-                lambdaExpression.Body.AcceptVisitor(this);
-                WriteToken(Roles.Semicolon);
-                WriteToken(Roles.RBrace);
+                lambdaExpression.Parameters.Single().AcceptVisitor(this);
             }
+            Space();
+            WriteToken(LambdaExpression.ArrowRole);
+            Space();
+            lambdaExpression.Body.AcceptVisitor(this);
             EndNode(lambdaExpression);
         }
 
@@ -1080,7 +1001,8 @@ namespace QuantKit
         {
             StartNode(namedExpression);
             namedExpression.NameToken.AcceptVisitor(this);
-            WriteToken(":", Roles.Assign);
+            Space();
+            WriteToken(Roles.Assign);
             Space();
             namedExpression.Expression.AcceptVisitor(this);
             EndNode(namedExpression);
@@ -1116,7 +1038,7 @@ namespace QuantKit
         public void VisitAnonymousTypeCreateExpression(AnonymousTypeCreateExpression anonymousTypeCreateExpression)
         {
             StartNode(anonymousTypeCreateExpression);
-            //			WriteKeyword(AnonymousTypeCreateExpression.NewKeywordRole);
+            WriteKeyword(AnonymousTypeCreateExpression.NewKeywordRole);
             PrintInitializerElements(anonymousTypeCreateExpression.Initializers);
             EndNode(anonymousTypeCreateExpression);
         }
@@ -1166,7 +1088,7 @@ namespace QuantKit
         public static string PrintPrimitiveValue(object val)
         {
             StringWriter writer = new StringWriter();
-            var visitor = new CppOutputVisitor(writer, new CSharpFormattingOptions());
+            var visitor = new HppOutputVisitor(writer, new CSharpFormattingOptions());
             visitor.WritePrimitiveValue(val);
             return writer.ToString();
         }
@@ -1205,7 +1127,7 @@ namespace QuantKit
             }
             else if (val is decimal)
             {
-                formatter.WriteToken(((decimal)val).ToString(NumberFormatInfo.InvariantInfo));
+                formatter.WriteToken(((decimal)val).ToString(NumberFormatInfo.InvariantInfo) + "m");
                 lastWritten = LastWritten.Other;
             }
             else if (val is float)
@@ -1215,13 +1137,15 @@ namespace QuantKit
                 {
                     // Strictly speaking, these aren't PrimitiveExpressions;
                     // but we still support writing these to make life easier for code generators.
+                    WriteKeyword("float");
+                    WriteToken(Roles.Dot);
                     if (float.IsPositiveInfinity(f))
                     {
-                        WriteIdentifier("Infinity");
+                        WriteIdentifier("PositiveInfinity");
                     }
                     else if (float.IsNegativeInfinity(f))
                     {
-                        WriteIdentifier("-Infinity");
+                        WriteIdentifier("NegativeInfinity");
                     }
                     else
                     {
@@ -1236,7 +1160,7 @@ namespace QuantKit
                     // the special case here than to do it in all code generators)
                     formatter.WriteToken("-");
                 }
-                formatter.WriteToken(f.ToString("R", NumberFormatInfo.InvariantInfo));
+                formatter.WriteToken(f.ToString("R", NumberFormatInfo.InvariantInfo) + "f");
                 lastWritten = LastWritten.Other;
             }
             else if (val is double)
@@ -1246,13 +1170,15 @@ namespace QuantKit
                 {
                     // Strictly speaking, these aren't PrimitiveExpressions;
                     // but we still support writing these to make life easier for code generators.
+                    WriteKeyword("double");
+                    WriteToken(Roles.Dot);
                     if (double.IsPositiveInfinity(f))
                     {
-                        WriteIdentifier("Infinity");
+                        WriteIdentifier("PositiveInfinity");
                     }
                     else if (double.IsNegativeInfinity(f))
                     {
-                        WriteIdentifier("-Infinity");
+                        WriteIdentifier("NegativeInfinity");
                     }
                     else
                     {
@@ -1285,6 +1211,14 @@ namespace QuantKit
                 //				} else {
                 b.Append(((IFormattable)val).ToString(null, NumberFormatInfo.InvariantInfo));
                 //				}
+                if (val is uint || val is ulong)
+                {
+                    b.Append("u");
+                }
+                if (val is long || val is ulong)
+                {
+                    b.Append("L");
+                }
                 formatter.WriteToken(b.ToString());
                 // needs space if identifier follows number; this avoids mistaking the following identifier as type suffix
                 lastWritten = LastWritten.KeywordOrIdentifier;
@@ -1660,10 +1594,10 @@ namespace QuantKit
             WriteTypeParameters(delegateDeclaration.TypeParameters);
             Space(policy.SpaceBeforeDelegateDeclarationParentheses);
             WriteCommaSeparatedListInParenthesis(delegateDeclaration.Parameters, policy.SpaceWithinMethodDeclarationParentheses);
-            foreach (Constraint constraint in delegateDeclaration.Constraints)
+            /*foreach (Constraint constraint in delegateDeclaration.Constraints)
             {
                 constraint.AcceptVisitor(this);
-            }
+            }*/
             Semicolon();
             EndNode(delegateDeclaration);
         }
@@ -1671,24 +1605,44 @@ namespace QuantKit
         public void VisitNamespaceDeclaration(NamespaceDeclaration namespaceDeclaration)
         {
             StartNode(namespaceDeclaration);
-            WriteKeyword("module", Roles.NamespaceKeyword);
+            WriteKeyword(Roles.NamespaceKeyword);
             WriteQualifiedIdentifier(namespaceDeclaration.Identifiers);
-            OpenBrace(policy.NamespaceBraceStyle);
+            OpenBrace(BraceStyle.EndOfLine);
             foreach (var member in namespaceDeclaration.Members)
             {
                 member.AcceptVisitor(this);
             }
-            CloseBrace(policy.NamespaceBraceStyle);
+            CloseBrace(BraceStyle.EndOfLine);
+            formatter.WriteComment(CommentType.InactiveCode, " // namespace " + namespaceDeclaration.Name);
             OptionalSemicolon();
             NewLine();
             EndNode(namespaceDeclaration);
         }
 
+        void WriteClassCommaSeparatedList(IEnumerable<AstNode> list)
+        {
+            bool isFirst = true;
+            foreach (AstNode node in list)
+            {
+                if (isFirst)
+                {
+                    isFirst = false;
+                }
+                else
+                {
+                    Comma(node);
+                }
+                formatter.WriteKeyword("public");
+                Space();
+                node.AcceptVisitor(this);
+            }
+        }
+
         public void VisitTypeDeclaration(TypeDeclaration typeDeclaration)
         {
             StartNode(typeDeclaration);
-            WriteAttributes(typeDeclaration.Attributes);
-            WriteModifiers(typeDeclaration.ModifierTokens);
+            //WriteAttributes(typeDeclaration.Attributes);
+            //WriteModifiers(typeDeclaration.ModifierTokens);
             BraceStyle braceStyle;
             switch (typeDeclaration.ClassType)
             {
@@ -1713,31 +1667,15 @@ namespace QuantKit
             WriteTypeParameters(typeDeclaration.TypeParameters);
             if (typeDeclaration.BaseTypes.Any())
             {
-
-                var bs = typeDeclaration.BaseTypes.FirstOrDefault(x => !CSharpToCpp.IsInterface(x));
-
-                if (bs != null)
-                {
-                    Space();
-                    WriteToken("extends", Roles.Colon);
-                    Space();
-                    bs.AcceptVisitor(this);
-                }
-
-                var ints = typeDeclaration.BaseTypes.Where(CSharpToCpp.IsInterface).ToList();
-
-                if (ints.Count > 0)
-                {
-                    Space();
-                    WriteToken(typeDeclaration.ClassType == ClassType.Interface ? "extends" : "implements", Roles.Colon);
-                    Space();
-                    WriteCommaSeparatedList(ints);
-                }
+                Space();
+                WriteToken(Roles.Colon);
+                Space();
+                WriteClassCommaSeparatedList(typeDeclaration.BaseTypes);
             }
-            foreach (Constraint constraint in typeDeclaration.Constraints)
+            /*foreach (Constraint constraint in typeDeclaration.Constraints)
             {
                 constraint.AcceptVisitor(this);
-            }
+            }*/
             OpenBrace(braceStyle);
             if (typeDeclaration.ClassType == ClassType.Enum)
             {
@@ -1773,7 +1711,7 @@ namespace QuantKit
 
         public void VisitUsingAliasDeclaration(UsingAliasDeclaration usingAliasDeclaration)
         {
-            StartNode(usingAliasDeclaration);
+            /*StartNode(usingAliasDeclaration);
             WriteKeyword(UsingAliasDeclaration.UsingKeywordRole);
             WriteIdentifier(usingAliasDeclaration.Alias, UsingAliasDeclaration.AliasRole);
             Space(policy.SpaceAroundEqualityOperator);
@@ -1781,16 +1719,16 @@ namespace QuantKit
             Space(policy.SpaceAroundEqualityOperator);
             usingAliasDeclaration.Import.AcceptVisitor(this);
             Semicolon();
-            EndNode(usingAliasDeclaration);
+            EndNode(usingAliasDeclaration);*/
         }
 
         public void VisitUsingDeclaration(UsingDeclaration usingDeclaration)
         {
-            StartNode(usingDeclaration);
+            /*StartNode(usingDeclaration);
             WriteKeyword(UsingDeclaration.UsingKeywordRole);
             usingDeclaration.Import.AcceptVisitor(this);
             Semicolon();
-            EndNode(usingDeclaration);
+            EndNode(usingDeclaration);*/
         }
 
         public void VisitExternAliasDeclaration(ExternAliasDeclaration externAliasDeclaration)
@@ -1870,12 +1808,6 @@ namespace QuantKit
         {
             StartNode(breakStatement);
             WriteKeyword("break");
-            var label = breakStatement.Annotation<LabelStatement>();
-            if (label != null)
-            {
-                Space();
-                WriteIdentifier(label.Label);
-            }
             Semicolon();
             EndNode(breakStatement);
         }
@@ -1892,12 +1824,6 @@ namespace QuantKit
         {
             StartNode(continueStatement);
             WriteKeyword("continue");
-            var label = continueStatement.Annotation<LabelStatement>();
-            if (label != null)
-            {
-                Space();
-                WriteIdentifier(label.Label);
-            }
             Semicolon();
             EndNode(continueStatement);
         }
@@ -2209,23 +2135,20 @@ namespace QuantKit
         {
             StartNode(catchClause);
             WriteKeyword(CatchClause.CatchKeywordRole);
-            Space(policy.SpaceBeforeCatchParentheses);
-            LPar();
-            Space(policy.SpacesWithinCatchParentheses);
-
-            if (!string.IsNullOrEmpty(catchClause.VariableName))
+            if (!catchClause.Type.IsNull)
             {
-                catchClause.VariableNameToken.AcceptVisitor(this);
+                Space(policy.SpaceBeforeCatchParentheses);
+                LPar();
+                Space(policy.SpacesWithinCatchParentheses);
+                catchClause.Type.AcceptVisitor(this);
+                if (!string.IsNullOrEmpty(catchClause.VariableName))
+                {
+                    Space();
+                    catchClause.VariableNameToken.AcceptVisitor(this);
+                }
+                Space(policy.SpacesWithinCatchParentheses);
+                RPar();
             }
-
-            //			if (!catchClause.Type.IsNull) {
-            //				WriteToken (Roles.Colon);
-            //				Space ();
-            //				catchClause.Type.AcceptVisitor(this);
-            //			}
-
-            Space(policy.SpacesWithinCatchParentheses);
-            RPar();
             catchClause.Body.AcceptVisitor(this);
             EndNode(catchClause);
         }
@@ -2267,26 +2190,11 @@ namespace QuantKit
         public void VisitVariableDeclarationStatement(VariableDeclarationStatement variableDeclarationStatement)
         {
             StartNode(variableDeclarationStatement);
-            foreach (var v in variableDeclarationStatement.Variables)
-            {
-                WriteModifiers(variableDeclarationStatement.GetChildrenByRole(VariableDeclarationStatement.ModifierRole));
-                WriteKeyword("var");
-                v.NameToken.AcceptVisitor(this);
-                if (!variableDeclarationStatement.Type.IsNull)
-                {
-                    WriteToken(Roles.Colon);
-                    Space();
-                    variableDeclarationStatement.Type.AcceptVisitor(this);
-                }
-                if (!v.Initializer.IsNull)
-                {
-                    Space(policy.SpaceAroundAssignment);
-                    WriteToken(Roles.Assign);
-                    Space(policy.SpaceAroundAssignment);
-                    v.Initializer.AcceptVisitor(this);
-                }
-                Semicolon();
-            }
+            WriteModifiers(variableDeclarationStatement.GetChildrenByRole(VariableDeclarationStatement.ModifierRole));
+            variableDeclarationStatement.Type.AcceptVisitor(this);
+            Space();
+            WriteCommaSeparatedList(variableDeclarationStatement.Variables);
+            Semicolon();
             EndNode(variableDeclarationStatement);
         }
 
@@ -2355,10 +2263,11 @@ namespace QuantKit
         public void VisitConstructorDeclaration(ConstructorDeclaration constructorDeclaration)
         {
             StartNode(constructorDeclaration);
-            WriteAttributes(constructorDeclaration.Attributes);
-            WriteModifiers(constructorDeclaration.ModifierTokens);
+            //WriteAttributes(constructorDeclaration.Attributes);
+            //WriteModifiers(constructorDeclaration.ModifierTokens);
+            TypeDeclaration type = constructorDeclaration.Parent as TypeDeclaration;
             StartNode(constructorDeclaration.NameToken);
-            WriteIdentifier(constructorDeclaration.Name);
+            WriteIdentifier(type != null ? type.Name : constructorDeclaration.Name);
             EndNode(constructorDeclaration.NameToken);
             Space(policy.SpaceBeforeConstructorDeclarationParentheses);
             WriteCommaSeparatedListInParenthesis(constructorDeclaration.Parameters, policy.SpaceWithinMethodDeclarationParentheses);
@@ -2367,7 +2276,8 @@ namespace QuantKit
                 Space();
                 constructorDeclaration.Initializer.AcceptVisitor(this);
             }
-            WriteMethodBody(constructorDeclaration.Body);
+            //WriteMethodBody(constructorDeclaration.Body);
+            Semicolon();
             EndNode(constructorDeclaration);
         }
 
@@ -2382,7 +2292,7 @@ namespace QuantKit
             }
             else
             {
-                WriteKeyword("super", ConstructorInitializer.BaseKeywordRole);
+                WriteKeyword(ConstructorInitializer.BaseKeywordRole);
             }
             Space(policy.SpaceBeforeMethodCallParentheses);
             WriteCommaSeparatedListInParenthesis(constructorInitializer.Arguments, policy.SpaceWithinMethodCallParentheses);
@@ -2461,23 +2371,16 @@ namespace QuantKit
 
         public void VisitFieldDeclaration(FieldDeclaration fieldDeclaration)
         {
+            if (fieldDeclaration.HasModifier(Modifiers.Internal) || fieldDeclaration.HasModifier(Modifiers.Private))
+                return;
+
             StartNode(fieldDeclaration);
-            foreach (var v in fieldDeclaration.Variables)
-            {
-                WriteModifiers(fieldDeclaration.GetChildrenByRole(VariableDeclarationStatement.ModifierRole));
-                v.NameToken.AcceptVisitor(this);
-                WriteToken(Roles.Colon);
-                Space();
-                fieldDeclaration.ReturnType.AcceptVisitor(this);
-                if (!v.Initializer.IsNull)
-                {
-                    Space(policy.SpaceAroundAssignment);
-                    WriteToken(Roles.Assign);
-                    Space(policy.SpaceAroundAssignment);
-                    v.Initializer.AcceptVisitor(this);
-                }
-                Semicolon();
-            }
+            WriteAttributes(fieldDeclaration.Attributes);
+            WriteModifiers(fieldDeclaration.ModifierTokens);
+            fieldDeclaration.ReturnType.AcceptVisitor(this);
+            Space();
+            WriteCommaSeparatedList(fieldDeclaration.Variables);
+            Semicolon();
             EndNode(fieldDeclaration);
         }
 
@@ -2539,35 +2442,21 @@ namespace QuantKit
         {
             StartNode(methodDeclaration);
             WriteAttributes(methodDeclaration.Attributes);
-            WriteModifiers(methodDeclaration.ModifierTokens);
+            //WriteModifiers(methodDeclaration.ModifierTokens);
+            methodDeclaration.ReturnType.AcceptVisitor(this);
+            Space();
             WritePrivateImplementationType(methodDeclaration.PrivateImplementationType);
             methodDeclaration.NameToken.AcceptVisitor(this);
-            WriteTypeParameters(methodDeclaration.TypeParameters,
-                tp =>
-                {
-                    var cs = methodDeclaration.Constraints.Where(x => x.TypeParameter.Identifier == tp.Name && x.BaseTypes.Count > 0)
-                        .Select(x => x.BaseTypes.FirstOrNullObject()).FirstOrDefault();
-                    if (cs != null)
-                    {
-                        Space();
-                        WriteToken("extends", Roles.Colon);
-                        Space();
-                        WriteIdentifier("NObject");
-                    }
-
-                });
+            WriteTypeParameters(methodDeclaration.TypeParameters);
             Space(policy.SpaceBeforeMethodDeclarationParentheses);
             WriteCommaSeparatedListInParenthesis(methodDeclaration.Parameters, policy.SpaceWithinMethodDeclarationParentheses);
-            if (!methodDeclaration.Name.StartsWith("set ", StringComparison.Ordinal))
+            /*foreach (Constraint constraint in methodDeclaration.Constraints)
             {
-                WriteToken(Roles.Colon);
-                Space();
-                methodDeclaration.ReturnType.AcceptVisitor(this);
-            }
-            //			foreach (Constraint constraint in methodDeclaration.Constraints) {
-            //				constraint.AcceptVisitor(this);
-            //			}
-            WriteMethodBody(methodDeclaration.Body);
+                constraint.AcceptVisitor(this);
+            }*/
+            Semicolon();
+            //NewLine();
+            //WriteMethodBody(methodDeclaration.Body);
             EndNode(methodDeclaration);
         }
 
@@ -2609,20 +2498,29 @@ namespace QuantKit
         {
             StartNode(parameterDeclaration);
             WriteAttributes(parameterDeclaration.Attributes);
-
+            switch (parameterDeclaration.ParameterModifier)
+            {
+                case ParameterModifier.Ref:
+                    WriteKeyword(ParameterDeclaration.RefModifierRole);
+                    break;
+                case ParameterModifier.Out:
+                    WriteKeyword(ParameterDeclaration.OutModifierRole);
+                    break;
+                case ParameterModifier.Params:
+                    WriteKeyword(ParameterDeclaration.ParamsModifierRole);
+                    break;
+                case ParameterModifier.This:
+                    WriteKeyword(ParameterDeclaration.ThisModifierRole);
+                    break;
+            }
+            parameterDeclaration.Type.AcceptVisitor(this);
+            if (!parameterDeclaration.Type.IsNull && !string.IsNullOrEmpty(parameterDeclaration.Name))
+            {
+                Space();
+            }
             if (!string.IsNullOrEmpty(parameterDeclaration.Name))
             {
                 parameterDeclaration.NameToken.AcceptVisitor(this);
-            }
-            if (parameterDeclaration.Annotation<OptionalParameterNote>() != null)
-            {
-                WriteToken("?", Roles.Attribute);
-            }
-            if (!parameterDeclaration.Type.IsNull)
-            {
-                WriteToken(Roles.Colon);
-                Space();
-                parameterDeclaration.Type.AcceptVisitor(this);
             }
             if (!parameterDeclaration.DefaultExpression.IsNull)
             {
@@ -2686,27 +2584,9 @@ namespace QuantKit
         public void VisitSimpleType(SimpleType simpleType)
         {
             StartNode(simpleType);
-
-            var ftype = simpleType as FunctionType;
-            if (ftype != null)
-            {
-                VisitFunctionType(ftype);
-            }
-            else
-            {
-                WriteIdentifier(simpleType.Identifier);
-                WriteTypeArguments(simpleType.TypeArguments);
-            }
+            WriteIdentifier(simpleType.Identifier);
+            WriteTypeArguments(simpleType.TypeArguments);
             EndNode(simpleType);
-        }
-
-        void VisitFunctionType(FunctionType functionType)
-        {
-            WriteCommaSeparatedListInParenthesis(functionType.Parameters, false);
-            Space();
-            WriteToken("=>", Roles.Assign);
-            Space();
-            functionType.ReturnType.AcceptVisitor(this);
         }
 
         public void VisitMemberType(MemberType memberType)
@@ -2732,6 +2612,7 @@ namespace QuantKit
             composedType.BaseType.AcceptVisitor(this);
             if (composedType.HasNullableSpecifier)
             {
+                WriteToken(ComposedType.NullableRole);
             }
             for (int i = 0; i < composedType.PointerRank; i++)
             {
@@ -2762,6 +2643,12 @@ namespace QuantKit
         {
             StartNode(primitiveType);
             WriteKeyword(primitiveType.Keyword);
+            if (primitiveType.Keyword == "new")
+            {
+                // new() constraint
+                LPar();
+                RPar();
+            }
             EndNode(primitiveType);
         }
 
@@ -2863,7 +2750,7 @@ namespace QuantKit
         #endregion
 
         #region Pattern Nodes
-        public void VisitPatternPlaceholder(AstNode placeholder, Pattern pattern)
+        public void VisitPatternPlaceholder(AstNode placeholder, ICSharpCode.NRefactory.PatternMatching.Pattern pattern)
         {
             StartNode(placeholder);
             VisitNodeInPattern(pattern);

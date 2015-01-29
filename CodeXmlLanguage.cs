@@ -325,7 +325,7 @@ namespace ICSharpCode.ILSpy
             traveNode.Add(new LicenseCtorRemoveTransform());
             traveNode.Add(new RemoveCompilerGenerateField());
 
-            traveNode.Run(syntaxTree);
+            //traveNode.Run(syntaxTree);
 
             foreach (AstNode node in syntaxTree.Children)
             {

@@ -1,4 +1,4 @@
-﻿// Copyright 2014 Frank A. Krueger
+﻿// Copyright 2015 Xiaojun Gao
 // 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -35,7 +35,11 @@ namespace QuantKit
 
         IEnumerable<IAstTransform> GetTransforms()
         {
-            yield return new FixBadNames();
+            yield return new RenameSmartQuantToQuantKit();
+            yield return new RemoveStaticCtorForLicenseManager();
+            yield return new RemoveCompilerGeneratedField();
+            yield return new RemoveLicenseProviderAttribue();
+            /*yield return new FixBadNames();
             yield return new LiftNestedClasses();
             yield return new RemoveConstraints();
             yield return new FlattenNamespaces();
@@ -83,12 +87,117 @@ namespace QuantKit
             yield return new RemoveAttributes();
             yield return new RemoveModifiers();
             yield return new RemoveEmptySwitch();
-            yield return new MakeWhileLoop();
-            yield return new GotoRemoval();
-            yield return new OrderClasses();
+            yield return new MakeWhileLoop();*/
+            //yield return new GotoRemoval();
+            /*yield return new OrderClasses();
             yield return new CallStaticCtors();
             yield return new AddReferences();
-            yield return new NullableChecks();
+            yield return new NullableChecks();*/
+        }
+
+        class RenameSmartQuantToQuantKit : DepthFirstAstVisitor, IAstTransform
+        {
+            public void Run(AstNode compilationUnit)
+            {
+                compilationUnit.AcceptVisitor(this);
+            }
+            public override void VisitNamespaceDeclaration(NamespaceDeclaration namespaceDeclaration)
+            {
+                base.VisitNamespaceDeclaration(namespaceDeclaration);
+                if (namespaceDeclaration.Name == "SmartQuant")
+                    namespaceDeclaration.Name = "QuantKit";
+            }
+        }
+
+        class ReplaceByteTypeToUnsignedChar
+        {
+
+        }
+
+        class RemoveStaticCtorForLicenseManager : DepthFirstAstVisitor, IAstTransform
+        {
+            public void Run(AstNode compilationUnit)
+            {
+                compilationUnit.AcceptVisitor(this);
+            }
+
+            public override void VisitConstructorDeclaration(ConstructorDeclaration constructorDeclaration)
+            {
+                base.VisitConstructorDeclaration(constructorDeclaration);
+
+                if (!constructorDeclaration.HasModifier(Modifiers.Static))
+                    return;
+                if (constructorDeclaration.Body.IsNull)
+                    return;
+
+                if (constructorDeclaration.Body.GetText().Contains("LicenseManager"))
+                    constructorDeclaration.Remove();
+            }
+        }
+
+        class RemoveCompilerGeneratedField : DepthFirstAstVisitor, IAstTransform
+        {
+            public void Run(AstNode compilationUnit)
+            {
+                compilationUnit.AcceptVisitor(this);
+            }
+            public override void VisitFieldDeclaration(FieldDeclaration fieldDeclaration)
+            {
+                base.VisitFieldDeclaration(fieldDeclaration);
+                bool isCompilerGenerated = false;
+                foreach (AttributeSection section in fieldDeclaration.Attributes)
+                {
+                    foreach (var attr in section.Attributes)
+                    {
+                        if (attr.GetText() == "CompilerGenerated")
+                        {
+                            isCompilerGenerated = true;
+                            break;
+                        }
+                    }
+                }
+                if (isCompilerGenerated)
+                    fieldDeclaration.Remove();
+            }
+        }
+
+        class RemoveLicenseProviderAttribue : DepthFirstAstVisitor, IAstTransform
+        {
+            public void Run(AstNode compilationUnit)
+            {
+                compilationUnit.AcceptVisitor(this);
+            }
+
+            public override void VisitDelegateDeclaration(DelegateDeclaration delegateDeclaration)
+            {
+                base.VisitDelegateDeclaration(delegateDeclaration);
+                removeAttributes(delegateDeclaration);
+            }
+
+            public override void VisitTypeDeclaration(TypeDeclaration typeDeclaration)
+            {
+                base.VisitTypeDeclaration(typeDeclaration);
+                removeAttributes(typeDeclaration);
+            }
+
+            public void removeAttributes(EntityDeclaration entity)
+            {
+                foreach (var section in entity.Attributes)
+                {
+                    foreach(var attr in section.Attributes)
+                    {
+                        if (attr.GetText().Contains("LicenseProvider"))
+                        {
+                            attr.Remove();
+                            break;
+                        }
+
+                    }
+
+                    if (section.Attributes.Count() == 0)
+                        section.Remove();
+                }
+            }
         }
 
         class CallStaticCtors : DepthFirstAstVisitor, IAstTransform

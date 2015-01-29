@@ -1,16 +1,20 @@
-﻿// Copyright (c) 2015 Xiaojun Gao
+﻿// Copyright (c) 2011 AlphaSierraPapa for the SharpDevelop Team
 // 
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
+// Permission is hereby granted, free of charge, to any person obtaining a copy of this
+// software and associated documentation files (the "Software"), to deal in the Software
+// without restriction, including without limitation the rights to use, copy, modify, merge,
+// publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons
+// to whom the Software is furnished to do so, subject to the following conditions:
 // 
-//    http://www.apache.org/licenses/LICENSE-2.0
+// The above copyright notice and this permission notice shall be included in all copies or
+// substantial portions of the Software.
 // 
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+// INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR
+// PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE
+// FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+// OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+// DEALINGS IN THE SOFTWARE.
 
 using System;
 using System.Collections;
@@ -39,13 +43,13 @@ namespace QuantKit
     /// Decompiler logic for C#.
     /// </summary>
     [Export(typeof(Language))]
-    public class CppLanguage : Language
+    public class HppLanguage : Language
     {
-        string name = "C++";
+        string name = "C++ hpp";
         bool showAllMembers = false;
         Predicate<IAstTransform> transformAbortCondition = null;
 
-        public CppLanguage()
+        public HppLanguage()
         {
         }
 
@@ -56,12 +60,12 @@ namespace QuantKit
 
         public override string FileExtension
         {
-            get { return ".cpp"; }
+            get { return ".h"; }
         }
 
         public override string ProjectFileExtension
         {
-            get { return ".cpro"; }
+            get { return ".hpro"; }
         }
 
         public override void DecompileMethod(MethodDefinition method, ITextOutput output, DecompilationOptions options)
@@ -214,6 +218,30 @@ namespace QuantKit
             GenerateCode(astBuilder, output);
         }
 
+        class IncludeVisitor : DepthFirstAstVisitor
+        {
+            public string typename = "";
+            public string namespacename = "";
+
+            public override void VisitTypeDeclaration(TypeDeclaration typeDeclaration)
+            {
+                base.VisitTypeDeclaration(typeDeclaration);
+                typename = typeDeclaration.Name;
+            }
+
+            public override void VisitNamespaceDeclaration(NamespaceDeclaration namespaceDeclaration)
+            {
+                base.VisitNamespaceDeclaration(namespaceDeclaration);
+                namespacename = namespaceDeclaration.Name;
+            }
+
+            public override void VisitDelegateDeclaration(DelegateDeclaration delegateDeclaration)
+            {
+                base.VisitDelegateDeclaration(delegateDeclaration);
+                typename = delegateDeclaration.Name;
+            }
+        }
+
         void GenerateCode(AstBuilder astBuilder, ITextOutput output)
         {
             var syntaxTree = astBuilder.SyntaxTree;
@@ -223,10 +251,23 @@ namespace QuantKit
             var transform = new CSharpToCpp();
             transform.Run(syntaxTree);
 
-            //Generate Cpp Code
+            var include = new IncludeVisitor();
+            syntaxTree.AcceptVisitor(include);
+
+            // generate include
+            string include_name = "__" + include.namespacename.ToUpper() + "_" + include.typename.ToUpper() + "_H__";
+            output.WriteLine("#ifndef " + include_name);
+            output.WriteLine("#define " + include_name);
+            output.WriteLine();
+
+            //Generate hpp Code
             var outputFormatter = new TextOutputFormatter(output) { FoldBraces = true };
             var formattingPolicy = FormattingOptionsFactory.CreateAllman();
-            syntaxTree.AcceptVisitor(new CSharpOutputVisitor(outputFormatter, formattingPolicy));
+            syntaxTree.AcceptVisitor(new HppOutputVisitor(outputFormatter, formattingPolicy));
+
+            // generate endif
+            output.WriteLine();
+            output.WriteLine("#endif // " + include_name);
         }
 
         public static string GetPlatformDisplayName(ModuleDefinition module)
@@ -729,10 +770,10 @@ namespace QuantKit
 
         public override MemberReference GetOriginalCodeLocation(MemberReference member)
         {
-            if (showAllMembers)// || !DecompilerSettingsPanel.CurrentDecompilerSettings.AnonymousMethods)
+            if (showAllMembers )//|| !DecompilerSettingsPanel.CurrentDecompilerSettings.AnonymousMethods)
                 return member;
             else
-                return Helpers.GetOriginalCodeLocation(member);
+                return GetOriginalCodeLocation(member);
         }
 
         public override string GetTooltip(MemberReference member)
