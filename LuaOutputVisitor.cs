@@ -1,6 +1,8 @@
 ﻿using ICSharpCode.Decompiler;
+using ICSharpCode.Decompiler.Ast;
 using ICSharpCode.NRefactory.CSharp;
 using ICSharpCode.NRefactory.PatternMatching;
+using Mono.Cecil;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -80,16 +82,29 @@ namespace QuantKit
         {
             List<TExpression> expressions;
         }
+        class TInvoke
+        {
+            public string target;
+            public string member;
+            public string type;
+        }
+
         class TBody
         {
-            List<Statement> statements;
+            public string text;
+            public List<TInvoke> invokes;
+            public TBody()
+            {
+                invokes = new List<TInvoke>();
+            }
         }
+
         class TAccessor : TEntity
         {
-            public string body;
+            public TBody body;
             public TAccessor() : base()
             {
-
+                body = new TBody();
             }
         }
         class TExpression
@@ -164,10 +179,11 @@ namespace QuantKit
         class TConstructor : TEntity
         {
             public List<TParameter> parameters;
-            public string body;
+            public TBody body;
             public TConstructor() : base()
             {
                 parameters = new List<TParameter>();
+                body = new TBody();
             }
         }
 
@@ -191,11 +207,12 @@ namespace QuantKit
         {
             public string typeParameters;
             public List<TParameter> parameters;
-            public string body;
+            public TBody body;
 
             public TMethod() : base()
             {
                 parameters = new List<TParameter>();
+                body = new TBody();
             }
         }
 
@@ -328,10 +345,148 @@ namespace QuantKit
             return (p.isStatic ? "static " : "") + (p.isPublic ? "public " : "") + (p.isPrivate ? "private " : "") + (p.isInternal ? "internal " : "") + (p.isOverride ? "override " : "");
         }
         // test ok, if body == "" means default access, no body
+
+        public static TypeReference GetTypeRef(AstNode expr)
+        {
+            var td = expr.Annotation<TypeDefinition>();
+            if (td != null)
+            {
+                return td;
+            }
+
+            var tr = expr.Annotation<TypeReference>();
+            if (tr != null)
+            {
+                return tr;
+            }
+
+            var ti = expr.Annotation<ICSharpCode.Decompiler.Ast.TypeInformation>();
+            if (ti != null)
+            {
+                return ti.InferredType;
+            }
+
+            var ilv = expr.Annotation<ICSharpCode.Decompiler.ILAst.ILVariable>();
+            if (ilv != null)
+            {
+                return ilv.Type;
+            }
+
+            var fr = expr.Annotation<FieldDefinition>();
+            if (fr != null)
+            {
+                return fr.FieldType;
+            }
+
+            var pr = expr.Annotation<PropertyDefinition>();
+            if (pr != null)
+            {
+                return pr.PropertyType;
+            }
+
+            var ie = expr as IndexerExpression;
+            if (ie != null)
+            {
+                var it = GetTypeRef(ie.Target);
+                if (it != null && it.IsArray)
+                {
+                    return it.GetElementType();
+                }
+            }
+
+            return null;
+        }
+
+        public TypeReference GetTargetTypeRef(MemberReferenceExpression memberReferenceExpression)
+        {
+            var pd = memberReferenceExpression.Annotation<PropertyDefinition>();
+            if (pd != null)
+            {
+                return pd.DeclaringType;
+            }
+
+            var fd = memberReferenceExpression.Annotation<FieldDefinition>();
+            if (fd == null)
+                fd = memberReferenceExpression.Annotation<FieldReference>() as FieldDefinition;
+            if (fd != null)
+            {
+                return fd.DeclaringType;
+            }
+
+            return Helpers.GetTypeRef(memberReferenceExpression.Target);
+        }
+
+        string TypeToString(TypeReference type, ICustomAttributeProvider typeAttributes = null)
+        {
+            if (type == null)
+                return "NULL TYPE";
+
+            ConvertTypeOptions options = ConvertTypeOptions.IncludeTypeParameterDefinitions | ConvertTypeOptions.IncludeNamespace;
+
+            AstType astType = AstBuilder.ConvertType(type, typeAttributes, options);
+
+            StringWriter w = new StringWriter();
+            if (type.IsByReference)
+            {
+                ParameterDefinition pd = typeAttributes as ParameterDefinition;
+                if (pd != null && (!pd.IsIn && pd.IsOut))
+                    w.Write("out ");
+                else
+                    w.Write("ref ");
+
+                if (astType is ComposedType && ((ComposedType)astType).PointerRank > 0)
+                    ((ComposedType)astType).PointerRank--;
+            }
+
+            astType.AcceptVisitor(new CSharpOutputVisitor(w, FormattingOptionsFactory.CreateAllman()));
+            return w.ToString();
+        }
+
+        string GetTargetTypeString(MemberReferenceExpression memberReferenceExpression)
+        {
+            TypeReference reference = GetTargetTypeRef(memberReferenceExpression);
+            return TypeToString(reference);
+        }
+
+        class FindAllMemberReference : DepthFirstAstVisitor
+        {
+            //public List<InvocationExpression>  InvokeList = new List<InvocationExpression>();
+            public List<MemberReferenceExpression> memberRefList = new List<MemberReferenceExpression>();
+
+            /*public override void VisitInvocationExpression(InvocationExpression invocationExpression)
+            {
+                base.VisitInvocationExpression(invocationExpression);
+                InvokeList.Add(invocationExpression);
+            }*/
+
+            public override void VisitMemberReferenceExpression(MemberReferenceExpression memberReferenceExpression)
+            {
+                base.VisitMemberReferenceExpression(memberReferenceExpression);
+                memberRefList.Add(memberReferenceExpression);
+            }
+    
+        }
+
+        void processBody(BlockStatement bs, TBody tb)
+        {
+            tb.text = bs.GetText();
+            var ivisitor = new FindAllMemberReference();
+            bs.AcceptVisitor(ivisitor);
+            var ilist = ivisitor.memberRefList;
+            foreach (var expr in ilist)
+            {
+                var invoke = new TInvoke();
+                invoke.target = expr.Target.GetText();
+                invoke.member = expr.MemberName;
+                invoke.type = GetTargetTypeString(expr);
+                tb.invokes.Add(invoke);
+            }
+        }
+
         void processAccessor(Accessor a, TAccessor ta)
         {
             processEntiry(a, ta);
-            ta.body = a.Body.GetText();
+            processBody(a.Body, ta.body);
         }
         // test ok
         void processProperty(PropertyDeclaration pd, TClass tc)
@@ -361,6 +516,8 @@ namespace QuantKit
             TMethod m = new TMethod();
             processEntiry(md, m);
 
+
+
             var plist = md.Descendants.OfType<ParameterDeclaration>().ToList();
             foreach (var item in plist)
             {
@@ -374,7 +531,7 @@ namespace QuantKit
                 m.parameters.Add(p);
                 
             }
-            m.body = md.Body.GetText();
+            processBody(md.Body, m.body);
             tc.methods.Add(m);
         }
 
@@ -396,7 +553,7 @@ namespace QuantKit
                 ctor.parameters.Add(p);
 
             }
-            ctor.body = cd.Body.GetText();
+            processBody(cd.Body, ctor.body);
             tc.constructors.Add(ctor);
         }
 
@@ -554,8 +711,22 @@ namespace QuantKit
              foreach (var p in tc.properties)
              {
                  output.WriteLine(getModifies(p) + " " + p.type + " " + p.name + " ");
-                 output.WriteLine( (p.getter != null ? (p.getter.body != "" ? "getter: " +p.getter.body : "getter:{}") : ""));
-                 output.WriteLine((p.setter != null ? (p.setter.body != "" ? "setter: " + p.setter.body : "setter:{}") : ""));
+                 output.WriteLine( (p.getter != null ? (p.getter.body.text != "" ? "getter: " +p.getter.body.text : "getter:{}") : ""));
+                 output.WriteLine((p.setter != null ? (p.setter.body.text != "" ? "setter: " + p.setter.body.text : "setter:{}") : ""));
+                 if (p.getter != null)
+                 {
+                     foreach (var i in p.getter.body.invokes)
+                     {
+                         output.WriteLine(i.target + ": " + i.type +" (" + i.member + ")");
+                     }
+                 }
+                 if (p.setter != null)
+                 {
+                     foreach (var i in p.setter.body.invokes)
+                     {
+                         output.WriteLine(i.target + ": " + i.type + " (" + i.member + ")");
+                     }
+                 }
              }
 
              output.WriteLine(" // constructor");
@@ -573,7 +744,11 @@ namespace QuantKit
                  }
                  output.Write(")");
                  output.WriteLine();
-                 output.WriteLine(m.body);
+                 output.WriteLine(m.body.text);
+                 foreach (var i in m.body.invokes)
+                 {
+                     output.WriteLine(i.target + ": " + i.type + " (" + i.member + ")");
+                 }
              }
 
              /*output.WriteLine(" // destructor");
@@ -609,7 +784,11 @@ namespace QuantKit
                  }
                  output.Write(")");
                  output.WriteLine();
-                 output.WriteLine(m.body);
+                 output.WriteLine(m.body.text);
+                 foreach (var i in m.body.invokes)
+                 {
+                     output.WriteLine(i.target + ": " + i.type + " (" + i.member + ")");
+                 }
              }
 
              output.WriteLine("}; // class end");

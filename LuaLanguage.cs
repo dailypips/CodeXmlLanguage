@@ -1,20 +1,16 @@
-﻿// Copyright (c) 2011 AlphaSierraPapa for the SharpDevelop Team
+﻿// Copyright (c) 2015 Xiaojun Gao
 // 
-// Permission is hereby granted, free of charge, to any person obtaining a copy of this
-// software and associated documentation files (the "Software"), to deal in the Software
-// without restriction, including without limitation the rights to use, copy, modify, merge,
-// publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons
-// to whom the Software is furnished to do so, subject to the following conditions:
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
 // 
-// The above copyright notice and this permission notice shall be included in all copies or
-// substantial portions of the Software.
+//    http://www.apache.org/licenses/LICENSE-2.0
 // 
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
-// INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR
-// PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE
-// FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
-// OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-// DEALINGS IN THE SOFTWARE.
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 using System;
 using System.Collections;
@@ -232,12 +228,6 @@ namespace QuantKit
                     foundClass = true;
             }
 
-            public override void VisitNamespaceDeclaration(NamespaceDeclaration namespaceDeclaration)
-            {
-                base.VisitNamespaceDeclaration(namespaceDeclaration);
-                namespacename = namespaceDeclaration.Name;
-            }
-
             public override void VisitDelegateDeclaration(DelegateDeclaration delegateDeclaration)
             {
                 base.VisitDelegateDeclaration(delegateDeclaration);
@@ -250,41 +240,32 @@ namespace QuantKit
             var syntaxTree = astBuilder.SyntaxTree;
             syntaxTree.AcceptVisitor(new InsertParenthesesVisitor { InsertParenthesesForReadability = true });
 
-            /*
             // generate AST
-            var transform = new CSharpToHpp();
+            /*var transform = new CSharpToCpp();
             transform.Run(syntaxTree);
 
             var include = new IncludeVisitor();
             syntaxTree.AcceptVisitor(include);
 
             // generate include
-            string include_name = "__" + include.namespacename.ToUpper() + "_" + include.typename.ToUpper() + "_H__";
-            output.WriteLine("#ifndef " + include_name);
-            output.WriteLine("#define " + include_name);
+            string include_name = include.typename + ".h";
+            output.WriteLine("#include <QuantKit/Event/" + include_name + ">");
+            output.WriteLine("#include <QuantKit/EventType.h>");
+            output.WriteLine("#include \"../Event_p.h\"");
+            output.WriteLine("#include \"DataObject_p.h\"");
+            output.WriteLine("#include \"Tick_p.h\"");
             output.WriteLine();
 
-            if (include.foundClass)
-            {
-                output.WriteLine("#include <QuantKit/quantkit_global.h>");
-                output.WriteLine("#include <QString>");
-                output.WriteLine("#include <QDateTime>");
-                output.WriteLine("#include <QSharedDataPointer>");
-                output.WriteLine();
-                output.WriteLine("#include \"qt_extension.h\"");
-                output.WriteLine();
-                output.WriteLine();
-            }
-
-            //Generate hpp Code
+            //Generate cpp Code
             var outputFormatter = new TextOutputFormatter(output) { FoldBraces = true };
             var formattingPolicy = FormattingOptionsFactory.CreateAllman();
-            syntaxTree.AcceptVisitor(new HppOutputVisitor(outputFormatter, formattingPolicy));
+            syntaxTree.AcceptVisitor(new PrivateHppOutputVisitor(outputFormatter, formattingPolicy));
+            syntaxTree.AcceptVisitor(new PrivateCppOutputVisitor(outputFormatter, formattingPolicy));
+            syntaxTree.AcceptVisitor(new CppOutputVisitor(outputFormatter, formattingPolicy));
             */
             syntaxTree.AcceptVisitor(new LuaOutputVisitor(output));
             // generate endif
-            //output.WriteLine();
-            //output.WriteLine("#endif // " + include_name);
+            output.WriteLine();
         }
 
         public static string GetPlatformDisplayName(ModuleDefinition module)
@@ -581,15 +562,29 @@ namespace QuantKit
                 new ParallelOptions { MaxDegreeOfParallelism = Environment.ProcessorCount },
                 delegate(IGrouping<string, TypeDefinition> file)
                 {
-                    using (StreamWriter w = new StreamWriter(Path.Combine(options.SaveAsProjectDirectory, file.Key)))
+
+                    AstBuilder codeDomBuilder = CreateAstBuilder(options, currentModule: module);
+                    foreach (TypeDefinition type in file)
                     {
-                        AstBuilder codeDomBuilder = CreateAstBuilder(options, currentModule: module);
-                        foreach (TypeDefinition type in file)
+                        codeDomBuilder.AddType(type);
+                    }
+                    codeDomBuilder.RunTransformations(transformAbortCondition);
+
+                    var clist = codeDomBuilder.SyntaxTree.Descendants.OfType<TypeDeclaration>().ToList();
+
+                    bool needWrite = false;
+                    if (clist.Count() != 0)
+                    {
+                        if (clist[0].ClassType == ClassType.Class)
+                            needWrite = true;
+                    }
+
+                    if (needWrite)
+                    {
+                        using (StreamWriter w = new StreamWriter(Path.Combine(options.SaveAsProjectDirectory, file.Key)))
                         {
-                            codeDomBuilder.AddType(type);
+                            GenerateCode(codeDomBuilder, new PlainTextOutput(w));
                         }
-                        codeDomBuilder.RunTransformations(transformAbortCondition);
-                        GenerateCode(codeDomBuilder, new PlainTextOutput(w));
                     }
                 });
             AstMethodBodyBuilder.PrintNumberOfUnhandledOpcodes();
@@ -787,10 +782,10 @@ namespace QuantKit
 
         public override MemberReference GetOriginalCodeLocation(MemberReference member)
         {
-            if (showAllMembers)//|| !DecompilerSettingsPanel.CurrentDecompilerSettings.AnonymousMethods)
+            if (showAllMembers)// || !DecompilerSettingsPanel.CurrentDecompilerSettings.AnonymousMethods)
                 return member;
             else
-                return GetOriginalCodeLocation(member);
+                return Helpers.GetOriginalCodeLocation(member);
         }
 
         public override string GetTooltip(MemberReference member)
@@ -824,4 +819,3 @@ namespace QuantKit
         }
     }
 }
-
