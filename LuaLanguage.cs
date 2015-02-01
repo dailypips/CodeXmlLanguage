@@ -43,13 +43,13 @@ namespace QuantKit
     /// Decompiler logic for C#.
     /// </summary>
     [Export(typeof(Language))]
-    public class HppLanguage : Language
+    public class LuaLanguage : Language
     {
-        string name = "C++ hpp";
+        string name = "Lua";
         bool showAllMembers = false;
         Predicate<IAstTransform> transformAbortCondition = null;
 
-        public HppLanguage()
+        public LuaLanguage()
         {
         }
 
@@ -60,12 +60,12 @@ namespace QuantKit
 
         public override string FileExtension
         {
-            get { return ".h"; }
+            get { return ".lua"; }
         }
 
         public override string ProjectFileExtension
         {
-            get { return ".hpro"; }
+            get { return ".luapro"; }
         }
 
         public override void DecompileMethod(MethodDefinition method, ITextOutput output, DecompilationOptions options)
@@ -250,6 +250,7 @@ namespace QuantKit
             var syntaxTree = astBuilder.SyntaxTree;
             syntaxTree.AcceptVisitor(new InsertParenthesesVisitor { InsertParenthesesForReadability = true });
 
+            /*
             // generate AST
             var transform = new CSharpToHpp();
             transform.Run(syntaxTree);
@@ -279,10 +280,11 @@ namespace QuantKit
             var outputFormatter = new TextOutputFormatter(output) { FoldBraces = true };
             var formattingPolicy = FormattingOptionsFactory.CreateAllman();
             syntaxTree.AcceptVisitor(new HppOutputVisitor(outputFormatter, formattingPolicy));
-
+            */
+            syntaxTree.AcceptVisitor(new LuaOutputVisitor(output));
             // generate endif
-            output.WriteLine();
-            output.WriteLine("#endif // " + include_name);
+            //output.WriteLine();
+            //output.WriteLine("#endif // " + include_name);
         }
 
         public static string GetPlatformDisplayName(ModuleDefinition module)
@@ -785,7 +787,7 @@ namespace QuantKit
 
         public override MemberReference GetOriginalCodeLocation(MemberReference member)
         {
-            if (showAllMembers )//|| !DecompilerSettingsPanel.CurrentDecompilerSettings.AnonymousMethods)
+            if (showAllMembers)//|| !DecompilerSettingsPanel.CurrentDecompilerSettings.AnonymousMethods)
                 return member;
             else
                 return GetOriginalCodeLocation(member);
@@ -822,3 +824,4 @@ namespace QuantKit
         }
     }
 }
+

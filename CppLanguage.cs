@@ -214,6 +214,27 @@ namespace QuantKit
             GenerateCode(astBuilder, output);
         }
 
+        class IncludeVisitor : DepthFirstAstVisitor
+        {
+            public string typename = "";
+            public string namespacename = "";
+            public bool foundClass = false;
+
+            public override void VisitTypeDeclaration(TypeDeclaration typeDeclaration)
+            {
+                base.VisitTypeDeclaration(typeDeclaration);
+                typename = typeDeclaration.Name;
+                if (typeDeclaration.ClassType == ClassType.Class)
+                    foundClass = true;
+            }
+
+            public override void VisitDelegateDeclaration(DelegateDeclaration delegateDeclaration)
+            {
+                base.VisitDelegateDeclaration(delegateDeclaration);
+                typename = delegateDeclaration.Name;
+            }
+        }
+
         void GenerateCode(AstBuilder astBuilder, ITextOutput output)
         {
             var syntaxTree = astBuilder.SyntaxTree;
@@ -223,10 +244,27 @@ namespace QuantKit
             var transform = new CSharpToCpp();
             transform.Run(syntaxTree);
 
-            //Generate Cpp Code
+            var include = new IncludeVisitor();
+            syntaxTree.AcceptVisitor(include);
+
+            // generate include
+            string include_name = include.typename + ".h";
+            output.WriteLine("#include <QuantKit/Event/" + include_name + ">");
+            output.WriteLine("#include <QuantKit/EventType.h>");
+            output.WriteLine("#include \"../Event_p.h\"");
+            output.WriteLine("#include \"DataObject_p.h\"");
+            output.WriteLine("#include \"Tick_p.h\"");
+            output.WriteLine();
+
+             //Generate cpp Code
             var outputFormatter = new TextOutputFormatter(output) { FoldBraces = true };
             var formattingPolicy = FormattingOptionsFactory.CreateAllman();
-            syntaxTree.AcceptVisitor(new CSharpOutputVisitor(outputFormatter, formattingPolicy));
+            syntaxTree.AcceptVisitor(new PrivateHppOutputVisitor(outputFormatter, formattingPolicy));
+            syntaxTree.AcceptVisitor(new PrivateCppOutputVisitor(outputFormatter, formattingPolicy));
+            syntaxTree.AcceptVisitor(new CppOutputVisitor(outputFormatter, formattingPolicy));
+
+            // generate endif
+            output.WriteLine();
         }
 
         public static string GetPlatformDisplayName(ModuleDefinition module)
@@ -523,15 +561,29 @@ namespace QuantKit
                 new ParallelOptions { MaxDegreeOfParallelism = Environment.ProcessorCount },
                 delegate(IGrouping<string, TypeDefinition> file)
                 {
-                    using (StreamWriter w = new StreamWriter(Path.Combine(options.SaveAsProjectDirectory, file.Key)))
+
+                    AstBuilder codeDomBuilder = CreateAstBuilder(options, currentModule: module);
+                    foreach (TypeDefinition type in file)
                     {
-                        AstBuilder codeDomBuilder = CreateAstBuilder(options, currentModule: module);
-                        foreach (TypeDefinition type in file)
+                        codeDomBuilder.AddType(type);
+                    }
+                    codeDomBuilder.RunTransformations(transformAbortCondition);
+
+                    var clist = codeDomBuilder.SyntaxTree.Descendants.OfType<TypeDeclaration>().ToList();
+
+                    bool needWrite = false;
+                    if (clist.Count() != 0)
+                    {
+                        if (clist[0].ClassType == ClassType.Class)
+                            needWrite = true;
+                    }
+
+                    if (needWrite)
+                    {
+                        using (StreamWriter w = new StreamWriter(Path.Combine(options.SaveAsProjectDirectory, file.Key)))
                         {
-                            codeDomBuilder.AddType(type);
+                            GenerateCode(codeDomBuilder, new PlainTextOutput(w));
                         }
-                        codeDomBuilder.RunTransformations(transformAbortCondition);
-                        GenerateCode(codeDomBuilder, new PlainTextOutput(w));
                     }
                 });
             AstMethodBodyBuilder.PrintNumberOfUnhandledOpcodes();

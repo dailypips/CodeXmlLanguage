@@ -1602,17 +1602,47 @@ namespace QuantKit
             EndNode(delegateDeclaration);
         }
 
+        class IncludeVisitor : DepthFirstAstVisitor
+        {
+            public string classname;
+            
+            public override void VisitTypeDeclaration(TypeDeclaration typeDeclaration)
+            {
+                base.VisitTypeDeclaration(typeDeclaration);
+                if (typeDeclaration.ClassType == ClassType.Class)
+                    classname = typeDeclaration.Name;
+            }
+
+        }
+
         public void VisitNamespaceDeclaration(NamespaceDeclaration namespaceDeclaration)
         {
             StartNode(namespaceDeclaration);
             WriteKeyword(Roles.NamespaceKeyword);
             WriteQualifiedIdentifier(namespaceDeclaration.Identifiers);
-            OpenBrace(BraceStyle.EndOfLine);
+            Space(); formatter.WriteKeyword("{"); NewLine();
+
+            var clist = namespaceDeclaration.Descendants.OfType<TypeDeclaration>().ToList();
+            string className = null;
+
+            if (clist.Count > 0)
+            {
+                if (clist[0].ClassType == ClassType.Class)
+                    className = clist[0].Name;
+            }
+
+            if (className != null)
+            {
+                NewLine();
+                formatter.WriteIdentifier("namespace Internal { class " + className + "Private; }");
+                NewLine();
+            }
+
             foreach (var member in namespaceDeclaration.Members)
             {
                 member.AcceptVisitor(this);
             }
-            CloseBrace(BraceStyle.EndOfLine);
+            formatter.WriteKeyword("}");
             formatter.WriteComment(CommentType.InactiveCode, " // namespace " + namespaceDeclaration.Name);
             OptionalSemicolon();
             NewLine();
@@ -1638,30 +1668,41 @@ namespace QuantKit
             }
         }
 
+        public void inheritDecl(TypeDeclaration typeDeclaration)
+        {
+
+        }
         public void VisitTypeDeclaration(TypeDeclaration typeDeclaration)
         {
             StartNode(typeDeclaration);
+            NewLine();
             //WriteAttributes(typeDeclaration.Attributes);
             //WriteModifiers(typeDeclaration.ModifierTokens);
             BraceStyle braceStyle;
+
             switch (typeDeclaration.ClassType)
             {
                 case ClassType.Enum:
-                    WriteKeyword(Roles.EnumKeyword);
+                    formatter.WriteKeyword("enum");
                     braceStyle = policy.EnumBraceStyle;
                     break;
                 case ClassType.Interface:
-                    WriteKeyword(Roles.InterfaceKeyword);
+                    formatter.WriteKeyword("class");
                     braceStyle = policy.InterfaceBraceStyle;
                     break;
                 case ClassType.Struct:
-                    WriteKeyword(Roles.StructKeyword);
+                    formatter.WriteKeyword("struct");
                     braceStyle = policy.StructBraceStyle;
                     break;
                 default:
-                    WriteKeyword(Roles.ClassKeyword);
+                    formatter.WriteKeyword("class");
                     braceStyle = policy.ClassBraceStyle;
                     break;
+            }
+            Space();
+            if (typeDeclaration.ClassType != ClassType.Enum)
+            {
+                formatter.WriteKeyword("QUANTKIT_EXPORT ");
             }
             typeDeclaration.NameToken.AcceptVisitor(this);
             WriteTypeParameters(typeDeclaration.TypeParameters);
@@ -1670,13 +1711,46 @@ namespace QuantKit
                 Space();
                 WriteToken(Roles.Colon);
                 Space();
-                WriteClassCommaSeparatedList(typeDeclaration.BaseTypes);
+                if (typeDeclaration.ClassType == ClassType.Enum)
+                {
+                    WriteCommaSeparatedList(typeDeclaration.BaseTypes);
+                }
+                else
+                {
+                    WriteClassCommaSeparatedList(typeDeclaration.BaseTypes);
+                }
             }
             /*foreach (Constraint constraint in typeDeclaration.Constraints)
             {
                 constraint.AcceptVisitor(this);
             }*/
-            OpenBrace(braceStyle);
+
+            NewLine(); formatter.WriteToken("{"); NewLine();
+            if(typeDeclaration.ClassType == ClassType.Class) {
+                formatter.WriteKeyword("public:");
+                NewLine();
+            }
+            formatter.Indent();
+            if (typeDeclaration.ClassType == ClassType.Class && !typeDeclaration.BaseTypes.Any())
+            {
+                NewLine();
+                formatter.WriteIdentifier("~" + typeDeclaration.Name + "();"); NewLine();
+                formatter.WriteIdentifier(typeDeclaration.Name + " &operator=(const " + typeDeclaration.Name + " &other);"); NewLine(); NewLine();
+                formatter.Unindent();
+                formatter.WriteIdentifier("#ifdef Q_COMPILER_RVALUE_REFS"); NewLine();
+                formatter.Indent();
+                formatter.WriteIdentifier(typeDeclaration.Name + " &operator=(" + typeDeclaration.Name + " &&other) { swap(other); return *this; }"); NewLine();
+                formatter.Unindent();
+                formatter.WriteIdentifier("#endif"); NewLine(); NewLine();
+                formatter.Indent();
+                formatter.WriteIdentifier("void swap(" + typeDeclaration.Name + " &other) { d_ptr.swap(other.d_ptr); }"); NewLine(); NewLine();
+                formatter.WriteIdentifier("bool operator==(const Event &other) const;"); NewLine();
+                formatter.WriteIdentifier("inline bool operator!=(const " + typeDeclaration.Name + " &other) const { return !(*this == other); }"); NewLine();
+                NewLine();
+                formatter.Unindent();
+                formatter.WriteIdentifier("public:"); NewLine();
+                formatter.Indent();
+            }
             if (typeDeclaration.ClassType == ClassType.Enum)
             {
                 bool first = true;
@@ -1703,9 +1777,40 @@ namespace QuantKit
                     member.AcceptVisitor(this);
                 }
             }
-            CloseBrace(braceStyle);
-            OptionalSemicolon();
+            formatter.Unindent();
+            if (typeDeclaration.ClassType == ClassType.Class)
+            {
+                if (!typeDeclaration.BaseTypes.Any())
+                {
+                    NewLine();
+                    formatter.WriteKeyword("protected:"); NewLine();
+                    formatter.Indent();
+                    formatter.WriteIdentifier(typeDeclaration.Name + "(Internal::" + typeDeclaration.Name + "Private& dd);"); NewLine();
+                    formatter.WriteIdentifier("QSharedDataPointer<Internal::" + typeDeclaration.Name + "Private> d_ptr;"); NewLine();
+                    formatter.Unindent();
+                    formatter.NewLine();
+                    formatter.WriteIdentifier("private:"); NewLine();
+                    formatter.Indent();
+                    formatter.WriteIdentifier("friend QUANTKIT_EXPORT QDataStream &operator<<(QDataStream &, const " + typeDeclaration.Name + " &);"); NewLine();
+                    formatter.Unindent();
+                }
+                else
+                {
+                    NewLine();
+                    formatter.WriteIdentifier("private:"); NewLine();
+                    formatter.Indent();
+                    formatter.WriteIdentifier("QK_DECLARE_PRIVATE(" +typeDeclaration.Name + ")"); NewLine();
+                    formatter.Unindent();
+                }
+            }
+            formatter.WriteToken("}");
+            Semicolon();
             NewLine();
+            if (typeDeclaration.ClassType == ClassType.Class && !typeDeclaration.BaseTypes.Any())
+            {
+                NewLine();
+                formatter.WriteIdentifier("QUANTKIT_EXPORT QDataStream &operator<<(QDataStream &, const " + typeDeclaration.Name + " &);"); NewLine();
+            }
             EndNode(typeDeclaration);
         }
 
@@ -2302,8 +2407,8 @@ namespace QuantKit
         public void VisitDestructorDeclaration(DestructorDeclaration destructorDeclaration)
         {
             StartNode(destructorDeclaration);
-            WriteAttributes(destructorDeclaration.Attributes);
-            WriteModifiers(destructorDeclaration.ModifierTokens);
+            //WriteAttributes(destructorDeclaration.Attributes);
+            //WriteModifiers(destructorDeclaration.ModifierTokens);
             WriteToken(DestructorDeclaration.TildeRole);
             TypeDeclaration type = destructorDeclaration.Parent as TypeDeclaration;
             StartNode(destructorDeclaration.NameToken);
@@ -2312,7 +2417,9 @@ namespace QuantKit
             Space(policy.SpaceBeforeConstructorDeclarationParentheses);
             LPar();
             RPar();
-            WriteMethodBody(destructorDeclaration.Body);
+            //WriteMethodBody(destructorDeclaration.Body);
+            Semicolon();
+            NewLine();
             EndNode(destructorDeclaration);
         }
 
@@ -2376,6 +2483,14 @@ namespace QuantKit
 
             StartNode(fieldDeclaration);
             //WriteAttributes(fieldDeclaration.Attributes);
+
+            var mlist = fieldDeclaration.Descendants.OfType<CSharpModifierToken>().ToList();
+            foreach (var item in mlist)
+            {
+                if (item.Modifier == Modifiers.Public)
+                    item.Remove();
+            }
+            //WriteModifiers(fieldDeclaration.ModifierTokens); Space();
             WriteModifiers(fieldDeclaration.ModifierTokens); Space();
             fieldDeclaration.ReturnType.AcceptVisitor(this);
             Space();
@@ -2440,9 +2555,28 @@ namespace QuantKit
 
         public void VisitMethodDeclaration(MethodDeclaration methodDeclaration)
         {
+            if (methodDeclaration.HasModifier(Modifiers.Override))
+                return;
+
             StartNode(methodDeclaration);
-            WriteAttributes(methodDeclaration.Attributes);
+            //WriteAttributes(methodDeclaration.Attributes);
             //WriteModifiers(methodDeclaration.ModifierTokens);
+
+
+
+            var plist = methodDeclaration.Ancestors.OfType<TypeDeclaration>().ToList();
+            
+            bool isInterface = false;
+
+            if (plist.Count() > 0)
+            {
+                if (plist[0].ClassType == ClassType.Interface)
+                    isInterface = true;
+            }
+
+            if (isInterface)
+                formatter.WriteToken("virtual ");
+
             methodDeclaration.ReturnType.AcceptVisitor(this);
             Space();
             WritePrivateImplementationType(methodDeclaration.PrivateImplementationType);
@@ -2454,8 +2588,13 @@ namespace QuantKit
             {
                 constraint.AcceptVisitor(this);
             }*/
+            if (isInterface)
+            {
+                Space(); 
+                formatter.WriteToken("= 0");
+            }
             Semicolon();
-            //NewLine();
+            NewLine();
             //WriteMethodBody(methodDeclaration.Body);
             EndNode(methodDeclaration);
         }
@@ -2494,6 +2633,26 @@ namespace QuantKit
             EndNode(operatorDeclaration);
         }
 
+        public bool IsSimpleType(AstType type)
+        {
+            var ptype = type as PrimitiveType;
+
+            if (ptype != null)
+                return true;
+
+            var td = Helpers.GetTypeDef(type);
+            if (td != null && td.IsEnum )
+            {
+                return true;
+            }
+
+            /*string name = type.GetText();
+            if ((name == "EventTyppe") || (name == "ObjectType"))
+                return true;*/
+
+            return false;
+        }
+
         public void VisitParameterDeclaration(ParameterDeclaration parameterDeclaration)
         {
             StartNode(parameterDeclaration);
@@ -2513,7 +2672,19 @@ namespace QuantKit
                     WriteKeyword(ParameterDeclaration.ThisModifierRole);
                     break;
             }
+
+
+            if (!IsSimpleType(parameterDeclaration.Type))
+            {
+                formatter.WriteKeyword("const");
+                Space();
+            }
+
             parameterDeclaration.Type.AcceptVisitor(this);
+
+            if (!IsSimpleType(parameterDeclaration.Type))
+                formatter.WriteToken("&");
+
             if (!parameterDeclaration.Type.IsNull && !string.IsNullOrEmpty(parameterDeclaration.Name))
             {
                 Space();
@@ -2534,43 +2705,61 @@ namespace QuantKit
 
         public void VisitPropertyDeclaration(PropertyDeclaration propertyDeclaration)
         {
+            if (propertyDeclaration.HasModifier(Modifiers.Override))
+                return;
+
             StartNode(propertyDeclaration);
             //WriteAttributes(propertyDeclaration.Attributes);
             //WriteModifiers(propertyDeclaration.ModifierTokens);
-            
+
+            var plist = propertyDeclaration.Ancestors.OfType<TypeDeclaration>().ToList();
+
+            bool isInterface = false;
+
+            if (plist.Count() > 0)
+            {
+                if (plist[0].ClassType == ClassType.Interface)
+                    isInterface = true;
+            }
+
+
             var getter = propertyDeclaration.Getter;
             if (!getter.IsNull && !(getter.HasModifier(Modifiers.Private) || getter.HasModifier(Modifiers.Internal)))
             {
+                if (isInterface)
+                    formatter.WriteToken("virtual ");
+
                 propertyDeclaration.ReturnType.AcceptVisitor(this);
                 Space();
                 formatter.WriteIdentifier("get");
                 propertyDeclaration.NameToken.AcceptVisitor(this);
-                LPar(); RPar();
+                LPar(); RPar(); Space(); formatter.WriteKeyword("const");
+                if (isInterface)
+                {
+                    Space();
+                    formatter.WriteToken("= 0 ");
+                }
                 Semicolon(); NewLine();
             }
 
             var setter = propertyDeclaration.Setter;
             if (!setter.IsNull && !(setter.HasModifier(Modifiers.Private) || setter.HasModifier(Modifiers.Internal)))
             {
-                propertyDeclaration.ReturnType.AcceptVisitor(this);
+                if (isInterface)
+                    formatter.WriteToken("virtual ");
+
+                formatter.WriteToken("void");
                 Space();
                 formatter.WriteIdentifier("set");
                 propertyDeclaration.NameToken.AcceptVisitor(this);
+
                 LPar();
-                if (propertyDeclaration.ReturnType is PrimitiveType)
+                if ((propertyDeclaration.ReturnType is PrimitiveType) || IsSimpleType(propertyDeclaration.ReturnType))
                 {
-                    var rtype = propertyDeclaration.ReturnType as PrimitiveType;
-                    if (rtype.Keyword == "string")
-                    {
-                        WriteKeyword("const QString& value");
-                    }
-                    else
-                    {
-                        propertyDeclaration.ReturnType.AcceptVisitor(this);
-                        Space();
-                        WriteIdentifier("value");
-                    }
-                }
+                    propertyDeclaration.ReturnType.AcceptVisitor(this);
+                    Space();
+                    WriteIdentifier("value");
+                }                
                 else
                 {
                     WriteKeyword("const");
@@ -2580,6 +2769,11 @@ namespace QuantKit
                     WriteIdentifier("value");
                 }
                 RPar();
+                if (isInterface)
+                {
+                    Space();
+                    formatter.WriteToken("= 0 ");
+                }
                 Semicolon(); NewLine();
             }
             //WritePrivateImplementationType(propertyDeclaration.PrivateImplementationType);
@@ -2627,10 +2821,12 @@ namespace QuantKit
         public void VisitSimpleType(SimpleType simpleType)
         {
             StartNode(simpleType);
+
             if (simpleType.Identifier == "DateTime")
                 WriteIdentifier("QDateTime");
             else
                 WriteIdentifier(simpleType.Identifier);
+            
             WriteTypeArguments(simpleType.TypeArguments);
             EndNode(simpleType);
         }
@@ -2688,23 +2884,12 @@ namespace QuantKit
         public void VisitPrimitiveType(PrimitiveType primitiveType)
         {
             StartNode(primitiveType);
-            switch (primitiveType.Keyword)
+            WriteKeyword(primitiveType.Keyword);
+            if (primitiveType.Keyword == "new")
             {
-                case "byte":
-                    formatter.WriteKeyword("unsigned char");
-                    break;
-                case "string":
-                    formatter.WriteKeyword("QString");
-                    break;
-                default:
-                    WriteKeyword(primitiveType.Keyword);
-                    if (primitiveType.Keyword == "new")
-                    {
-                        // new() constraint
-                        LPar();
-                        RPar();
-                    }
-                    break;
+                // new() constraint
+                LPar();
+                RPar();
             }
             EndNode(primitiveType);
         }

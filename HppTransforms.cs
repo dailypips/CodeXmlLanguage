@@ -23,7 +23,7 @@ using ICSharpCode.NRefactory;
 
 namespace QuantKit
 {
-    public class CSharpToCpp : IAstTransform
+    public class CSharpToHpp : IAstTransform
     {
         public void Run(AstNode compilationUnit)
         {
@@ -240,7 +240,7 @@ namespace QuantKit
                 }
 
                 var alist = constructorDeclaration.Descendants.OfType<ExpressionStatement>().ToList();
-                if(alist.Count() == 0)
+                if (alist.Count() == 0)
                     constructorDeclaration.Remove();
             }
         }
@@ -294,7 +294,7 @@ namespace QuantKit
             {
                 foreach (var section in entity.Attributes)
                 {
-                    foreach(var attr in section.Attributes)
+                    foreach (var attr in section.Attributes)
                     {
                         if (attr.GetText().Contains("LicenseProvider"))
                         {
@@ -4384,6 +4384,6 @@ namespace QuantKit
 
     }
 
-    class OptionalParameterNote { }
+    class HppOptionalParameterNote { }
 }
 

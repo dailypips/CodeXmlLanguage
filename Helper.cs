@@ -21,6 +21,7 @@ using System.Linq;
 using ICSharpCode.Decompiler;
 using Mono.Cecil;
 using Mono.Cecil.Cil;
+using ICSharpCode.NRefactory.CSharp;
 
 namespace QuantKit
 {
@@ -151,6 +152,125 @@ namespace QuantKit
                     return method;
             }
             return null;
+        }
+
+        public static TypeDefinition GetTypeDef(AstNode expr)
+        {
+            var tr = GetTypeRef(expr);
+            var td = tr as TypeDefinition;
+            if (td == null && tr != null)
+                td = tr.Resolve();
+            return td;
+        }
+
+        public static TypeReference GetTypeRef(AstNode expr)
+        {
+            var td = expr.Annotation<TypeDefinition>();
+            if (td != null)
+            {
+                return td;
+            }
+
+            var tr = expr.Annotation<TypeReference>();
+            if (tr != null)
+            {
+                return tr;
+            }
+
+            var ti = expr.Annotation<ICSharpCode.Decompiler.Ast.TypeInformation>();
+            if (ti != null)
+            {
+                return ti.InferredType;
+            }
+
+            var ilv = expr.Annotation<ICSharpCode.Decompiler.ILAst.ILVariable>();
+            if (ilv != null)
+            {
+                return ilv.Type;
+            }
+
+            var fr = expr.Annotation<FieldDefinition>();
+            if (fr != null)
+            {
+                return fr.FieldType;
+            }
+
+            var pr = expr.Annotation<PropertyDefinition>();
+            if (pr != null)
+            {
+                return pr.PropertyType;
+            }
+
+            var ie = expr as IndexerExpression;
+            if (ie != null)
+            {
+                var it = GetTypeRef(ie.Target);
+                if (it != null && it.IsArray)
+                {
+                    return it.GetElementType();
+                }
+            }
+
+            return null;
+        }
+
+        public static TypeReference GetTargetTypeRef(MemberReferenceExpression memberReferenceExpression)
+        {
+            var pd = memberReferenceExpression.Annotation<PropertyDefinition>();
+            if (pd != null)
+            {
+                return pd.DeclaringType;
+            }
+
+            var fd = memberReferenceExpression.Annotation<FieldDefinition>();
+            if (fd == null)
+                fd = memberReferenceExpression.Annotation<FieldReference>() as FieldDefinition;
+            if (fd != null)
+            {
+                return fd.DeclaringType;
+            }
+
+            return Helpers.GetTypeRef(memberReferenceExpression.Target);
+        }
+
+        public static string GetClassName(AstNode expr)
+        {
+            string className = "";
+            var plist = expr.Ancestors.OfType<TypeDeclaration>().ToList();
+            if (plist.Count > 0)
+            {
+                className = plist[0].Name;
+            }
+            return className;
+        }
+
+        public static string GetClassBaseName(AstNode expr)
+        {
+            string baseName = "";
+            var typedecl = expr as TypeDeclaration;
+
+            if (typedecl == null)
+            {
+                var plist = expr.Ancestors.OfType<TypeDeclaration>().ToList();
+                if (plist.Count > 0)
+                {
+                    TypeDeclaration type = plist[0];
+                    var blist = type.BaseTypes.ToList();
+                    if (blist.Count() > 0)
+                    {
+                        baseName = blist[0].GetText();
+                    }
+                }
+            }
+            else
+            {
+                var blist = typedecl.BaseTypes.ToList();
+                if (blist.Count() > 0)
+                {
+                    baseName = blist[0].GetText();
+                }
+            }
+            return baseName;
         }
     }
 }
