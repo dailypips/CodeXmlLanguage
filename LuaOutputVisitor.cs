@@ -58,6 +58,10 @@ namespace QuantKit
                 te.isStatic = true;
             te.name = ed.Name;
             te.type = ed.ReturnType.GetText();
+            foreach(var attr in ed.Attributes)
+            {
+                te.attributes += attr.GetText();
+            }
         }
         // test ok
         void processField(FieldDeclaration fd, TClass tc)
@@ -445,9 +449,133 @@ namespace QuantKit
                     processEnum(item, ns);
                 }
             }
-            //outputlua(ns);
+            outputlua(ns);
         }
         
         #endregion
+
+        #region output
+        void outputlua(TNamespace ns)
+        {
+            var transform = new LuaTransform();
+            transform.Run(ns);
+
+            output.WriteLine("namespace " + ns.name + "{");
+            foreach (var item in ns.classes)
+            {
+                var c = item as TClass;
+                if (c != null)
+                    WriteClass(c);
+                else
+                    WriteEnum(item as TEnum);
+            }
+            output.WriteLine("} // namespaec " + ns.name);
+        }
+
+        void WriteEnum(TEnum te)
+        {
+            output.WriteLine("enum " + te.name + "{");
+            foreach (var item in te.members)
+            {
+                output.WriteLine("\t" + item.name + (item.init == null ? "" : "= " + item.init));
+            }
+            output.WriteLine("}");
+        }
+        void WriteClass(TClass tc)
+        {
+            output.WriteLine("class " + tc.name + "{");
+            output.WriteLine("// fields");
+            foreach (var item in tc.fields)
+            {
+                output.WriteLine("\t" + item.type + " " + item.name + (item.init == null ? "" : item.init));
+            }
+            output.WriteLine("// properties");
+            foreach (var p in tc.properties)
+            {
+                output.WriteLine(getModifies(p) + " " + p.type + " " + p.name + " ");
+                output.WriteLine((p.getter != null ? (p.getter.body.text != "" ? "getter: " + p.getter.body.text : "getter:{}") : ""));
+                output.WriteLine((p.setter != null ? (p.setter.body.text != "" ? "setter: " + p.setter.body.text : "setter:{}") : ""));
+                if (p.getter != null)
+                {
+                    foreach (var i in p.getter.body.invokes)
+                    {
+                        //output.WriteLine(i.target + ": " + i.type + " (" + i.member + ")");
+                    }
+                }
+                if (p.setter != null)
+                {
+                    foreach (var i in p.setter.body.invokes)
+                    {
+                       // output.WriteLine(i.target + ": " + i.type + " (" + i.member + ")");
+                    }
+                }
+            }
+
+            output.WriteLine(" // constructor");
+            foreach (var m in tc.constructors)
+            {
+                bool isfirst = true;
+                output.Write(getModifies(m) + " " + m.name + "(");
+                foreach (var p in m.parameters)
+                {
+                    if (isfirst)
+                        isfirst = false;
+                    else
+                        output.Write(", ");
+                    output.Write(p.type + " " + p.name + " " + (p.optionValue != null ? " = " + p.optionValue : ""));
+                }
+                output.Write(")");
+                output.WriteLine();
+                output.WriteLine(m.body.text);
+                foreach (var i in m.body.invokes)
+                {
+                    //output.WriteLine(i.target + ": " + i.type + " (" + i.member + ")");
+                }
+            }
+
+            /*output.WriteLine(" // destructor");
+            foreach (var m in tc.destructors)
+            {
+                bool isfirst = true;
+                output.Write(getModifies(m) + " " + m.name + "(");
+                foreach (var p in m.parameters)
+                {
+                    if (isfirst)
+                        isfirst = false;
+                    else
+                        output.Write(", ");
+                    output.Write(p.type + " " + p.name + " " + (p.optionValue != null ? " = " + p.optionValue : ""));
+                }
+                output.Write(")");
+                output.WriteLine();
+                output.WriteLine(m.body);
+            }*/
+
+            output.WriteLine(" // methods");
+            foreach (var m in tc.methods)
+            {
+                bool isfirst = true;
+                output.Write(getModifies(m) + " " + m.type + " " + m.name + "(");
+                foreach (var p in m.parameters)
+                {
+                    if (isfirst)
+                        isfirst = false;
+                    else
+                        output.Write(", ");
+                    output.Write(p.type + " " + p.name + " " + (p.optionValue != null ? " = " + p.optionValue : ""));
+                }
+                output.Write(")");
+                output.WriteLine();
+                output.WriteLine(m.body.text);
+                foreach (var i in m.body.invokes)
+                {
+                    //output.WriteLine(i.target + ": " + i.type + " (" + i.member + ")");
+                }
+            }
+
+            output.WriteLine("}; // class end");
+        }
+        #endregion
+
     }
 } 

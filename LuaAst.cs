@@ -140,6 +140,7 @@ namespace QuantKit
     public class TEntity
     {
         public string name;
+        public string attributes;
         public bool isOverride;
         public bool isPublic;
         public bool isPrivate;

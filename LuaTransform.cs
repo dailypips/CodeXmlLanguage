@@ -22,8 +22,12 @@ namespace QuantKit
 
         IEnumerable<ILuaTransform> GetTransforms()
         {
+            yield return new RemoveCompilerGenerateField();
+            yield return new AddPropertyImpl();
             yield return new MakeIndexerToMember();
             yield return new MakePropertyToMember();
+            yield return new RemoveLicenseMethod();
+            yield return new MakePublicFieldToMethod();
             yield return new RenameTransform();
         }
 
@@ -32,6 +36,7 @@ namespace QuantKit
         #endregion
         
         #region rename
+        // must be run after all properties and indexers convert to method
         class RenameTransform : ILuaTransform
         {
             public void Run(TNamespace ns)
@@ -39,10 +44,61 @@ namespace QuantKit
 
             }
         }
-    #endregion
+        #endregion
 
+        #region AddPropertyImpl
+        class AddPropertyImpl : ILuaTransform
+        {
+            public void Run(TNamespace ns)
+            {
 
-    #region MakeIndexerToMethod
+            }
+        }
+        #endregion
+
+        #region RemoveCompilerGenerateField
+        class RemoveCompilerGenerateField : ILuaTransform
+        {
+            public void Run(TNamespace ns)
+            {
+                foreach (var td in ns.classes)
+                {
+                    var c = td as TClass;
+                    if (c != null)
+                    {
+                        c.fields.RemoveAll(item => (item.attributes!=null) && (item.attributes.Contains("CompilerGenerated")));
+                    }
+                }
+            }
+        }
+        #endregion
+        #region MakePublicFieldToMethod
+        class MakePublicFieldToMethod : ILuaTransform
+        {
+            public void Run(TNamespace ns)
+            {
+
+            }
+        }
+        #endregion
+        #region RemoveLicenseMethod
+        class RemoveLicenseMethod : ILuaTransform
+        {
+            public void Run(TNamespace ns)
+            {
+                foreach (var td in ns.classes)
+                {
+                    var c = td as TClass;
+                    if (c != null)
+                    {
+                        c.constructors.RemoveAll(item => item.body.text.Contains("LicenseManager"));
+                    }
+                }
+            }
+        }
+        #endregion
+
+        #region MakeIndexerToMethod
         class MakeIndexerToMember : ILuaTransform
         {
             public void Run(TNamespace ns)
@@ -64,7 +120,9 @@ namespace QuantKit
                                     m.isPublic = true;
                                 m.type = p.type;
                                 m.parameters.AddRange(p.parameters);
-                                m.body = p.getter.body;
+                                m.body.text = p.getter.body.text;
+                                m.body.invokes.Clear();
+                                m.body.invokes.AddRange(p.getter.body.invokes);
                                 c.methods.Add(m);
                             }
 
@@ -78,7 +136,9 @@ namespace QuantKit
                                     m.isPublic = true;
                                 m.type = "void";
                                 m.parameters.AddRange(p.parameters);
-                                m.body = p.setter.body;
+                                m.body.text = p.setter.body.text;
+                                m.body.invokes.Clear();
+                                m.body.invokes.AddRange(p.getter.body.invokes);
                                 c.methods.Add(m);
                             }
                         }
