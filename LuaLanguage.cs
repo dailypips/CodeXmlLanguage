@@ -32,6 +32,7 @@ using ICSharpCode.NRefactory.CSharp;
 using Mono.Cecil;
 using System.Text;
 using ICSharpCode.ILSpy;
+using System.Diagnostics;
 
 namespace QuantKit
 {
@@ -63,6 +64,8 @@ namespace QuantKit
         {
             get { return ".luapro"; }
         }
+
+        #region override
 
         public override void DecompileMethod(MethodDefinition method, ITextOutput output, DecompilationOptions options)
         {
@@ -313,9 +316,36 @@ namespace QuantKit
             if (options.FullDecompilation && options.SaveAsProjectDirectory != null)
             {
                 HashSet<string> directories = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-                var files = WriteCodeFilesInProject(assembly.ModuleDefinition, options, directories).ToList();
-                files.AddRange(WriteResourceFilesInProject(assembly, options, directories));
-                WriteProjectFile(new TextOutputWriter(output), files, assembly.ModuleDefinition);
+                var nsList = new List<TNamespace>();
+                var dict = new Dictionary<string, TNamespace>();
+                ParserFilesInProject(assembly.ModuleDefinition, options, directories, nsList);
+                var default_key = "NULL";
+                var default_ns = new TNamespace();
+                default_ns.name = default_key;
+                dict.Add(default_ns.name, default_ns);
+                foreach(var ns in nsList)
+                {
+                    string key;
+                    if (ns.name == null)
+                        key = default_key;
+                    else
+                        key = ns.name;
+
+                    if (dict.ContainsKey(key))
+                    {
+                        var mns = dict[key];
+                        foreach (var c in ns.classes)
+                        {
+                            mns.classes.Add(c);
+                        }
+                    }
+                    else
+                    {
+                        dict[ns.name] = ns;
+                    }
+                }
+                ModuleTransform(dict["SmartQuant"]);
+                WriteFilesInProject(assembly.ModuleDefinition, options, directories, dict["SmartQuant"]);
             }
             else
             {
@@ -360,139 +390,33 @@ namespace QuantKit
                 }
             }
         }
+        #endregion
 
         #region WriteProjectFile
-        void WriteProjectFile(TextWriter writer, IEnumerable<Tuple<string, string>> files, ModuleDefinition module)
+
+        void WriteTypeAsHpp(ITextOutput output, TTypeDecl tc)
         {
-            const string ns = "http://schemas.microsoft.com/developer/msbuild/2003";
-            string platformName = GetPlatformName(module);
-            using (XmlTextWriter w = new XmlTextWriter(writer))
-            {
-                w.Formatting = Formatting.Indented;
-                w.WriteStartDocument();
-                w.WriteStartElement("Project", ns);
-                w.WriteAttributeString("ToolsVersion", "4.0");
-                w.WriteAttributeString("DefaultTargets", "Build");
-
-                w.WriteStartElement("PropertyGroup");
-                w.WriteElementString("ProjectGuid", Guid.NewGuid().ToString("B").ToUpperInvariant());
-
-                w.WriteStartElement("Configuration");
-                w.WriteAttributeString("Condition", " '$(Configuration)' == '' ");
-                w.WriteValue("Debug");
-                w.WriteEndElement(); // </Configuration>
-
-                w.WriteStartElement("Platform");
-                w.WriteAttributeString("Condition", " '$(Platform)' == '' ");
-                w.WriteValue(platformName);
-                w.WriteEndElement(); // </Platform>
-
-                switch (module.Kind)
-                {
-                    case ModuleKind.Windows:
-                        w.WriteElementString("OutputType", "WinExe");
-                        break;
-                    case ModuleKind.Console:
-                        w.WriteElementString("OutputType", "Exe");
-                        break;
-                    default:
-                        w.WriteElementString("OutputType", "Library");
-                        break;
-                }
-
-                w.WriteElementString("AssemblyName", module.Assembly.Name.Name);
-                bool useTargetFrameworkAttribute = false;
-                var targetFrameworkAttribute = module.Assembly.CustomAttributes.FirstOrDefault(a => a.AttributeType.FullName == "System.Runtime.Versioning.TargetFrameworkAttribute");
-                if (targetFrameworkAttribute != null && targetFrameworkAttribute.ConstructorArguments.Any())
-                {
-                    string frameworkName = (string)targetFrameworkAttribute.ConstructorArguments[0].Value;
-                    string[] frameworkParts = frameworkName.Split(',');
-                    string frameworkVersion = frameworkParts.FirstOrDefault(a => a.StartsWith("Version="));
-                    if (frameworkVersion != null)
-                    {
-                        w.WriteElementString("TargetFrameworkVersion", frameworkVersion.Substring("Version=".Length));
-                        useTargetFrameworkAttribute = true;
-                    }
-                    string frameworkProfile = frameworkParts.FirstOrDefault(a => a.StartsWith("Profile="));
-                    if (frameworkProfile != null)
-                        w.WriteElementString("TargetFrameworkProfile", frameworkProfile.Substring("Profile=".Length));
-                }
-                if (!useTargetFrameworkAttribute)
-                {
-                    switch (module.Runtime)
-                    {
-                        case TargetRuntime.Net_1_0:
-                            w.WriteElementString("TargetFrameworkVersion", "v1.0");
-                            break;
-                        case TargetRuntime.Net_1_1:
-                            w.WriteElementString("TargetFrameworkVersion", "v1.1");
-                            break;
-                        case TargetRuntime.Net_2_0:
-                            w.WriteElementString("TargetFrameworkVersion", "v2.0");
-                            // TODO: Detect when .NET 3.0/3.5 is required
-                            break;
-                        default:
-                            w.WriteElementString("TargetFrameworkVersion", "v4.0");
-                            break;
-                    }
-                }
-                w.WriteElementString("WarningLevel", "4");
-
-                w.WriteEndElement(); // </PropertyGroup>
-
-                w.WriteStartElement("PropertyGroup"); // platform-specific
-                w.WriteAttributeString("Condition", " '$(Platform)' == '" + platformName + "' ");
-                w.WriteElementString("PlatformTarget", platformName);
-                w.WriteEndElement(); // </PropertyGroup> (platform-specific)
-
-                w.WriteStartElement("PropertyGroup"); // Debug
-                w.WriteAttributeString("Condition", " '$(Configuration)' == 'Debug' ");
-                w.WriteElementString("OutputPath", "bin\\Debug\\");
-                w.WriteElementString("DebugSymbols", "true");
-                w.WriteElementString("DebugType", "full");
-                w.WriteElementString("Optimize", "false");
-                w.WriteEndElement(); // </PropertyGroup> (Debug)
-
-                w.WriteStartElement("PropertyGroup"); // Release
-                w.WriteAttributeString("Condition", " '$(Configuration)' == 'Release' ");
-                w.WriteElementString("OutputPath", "bin\\Release\\");
-                w.WriteElementString("DebugSymbols", "true");
-                w.WriteElementString("DebugType", "pdbonly");
-                w.WriteElementString("Optimize", "true");
-                w.WriteEndElement(); // </PropertyGroup> (Release)
-
-
-                w.WriteStartElement("ItemGroup"); // References
-                foreach (AssemblyNameReference r in module.AssemblyReferences)
-                {
-                    if (r.Name != "mscorlib")
-                    {
-                        w.WriteStartElement("Reference");
-                        w.WriteAttributeString("Include", r.Name);
-                        w.WriteEndElement();
-                    }
-                }
-                w.WriteEndElement(); // </ItemGroup> (References)
-
-                foreach (IGrouping<string, string> gr in (from f in files group f.Item2 by f.Item1 into g orderby g.Key select g))
-                {
-                    w.WriteStartElement("ItemGroup");
-                    foreach (string file in gr.OrderBy(f => f, StringComparer.OrdinalIgnoreCase))
-                    {
-                        w.WriteStartElement(gr.Key);
-                        w.WriteAttributeString("Include", file);
-                        w.WriteEndElement();
-                    }
-                    w.WriteEndElement();
-                }
-
-                w.WriteStartElement("Import");
-                w.WriteAttributeString("Project", "$(MSBuildToolsPath)\\Microsoft.CSharp.targets");
-                w.WriteEndElement();
-
-                w.WriteEndDocument();
-            }
+            output.WriteLine(tc.name);
         }
+
+        void WriteTypeAsCpp(ITextOutput output, TTypeDecl tc)
+        {
+            output.WriteLine(tc.name);
+        }
+
+        #region transform
+        void RunTransform(TNamespace ns)
+        {
+            var transform = new LuaTransform();
+            transform.Run(ns);
+        }
+
+        void ModuleTransform(TNamespace root)
+        {
+            RunTransform(root);
+        }
+        #endregion
+
         #endregion
 
         #region WriteCodeFilesInProject
@@ -503,25 +427,6 @@ namespace QuantKit
             if (type.Namespace == "XamlGeneratedNamespace" && type.Name == "GeneratedInternalTypeHelper")
                 return false;
             return true;
-        }
-
-        IEnumerable<Tuple<string, string>> WriteAssemblyInfo(ModuleDefinition module, DecompilationOptions options, HashSet<string> directories)
-        {
-            // don't automatically load additional assemblies when an assembly node is selected in the tree view
-            using (LoadedAssembly.DisableAssemblyLoad())
-            {
-                AstBuilder codeDomBuilder = CreateAstBuilder(options, currentModule: module);
-                codeDomBuilder.AddAssembly(module, onlyAssemblyLevel: true);
-                codeDomBuilder.RunTransformations(transformAbortCondition);
-
-                string prop = "Properties";
-                if (directories.Add("Properties"))
-                    Directory.CreateDirectory(Path.Combine(options.SaveAsProjectDirectory, prop));
-                string assemblyInfo = Path.Combine(prop, "AssemblyInfo" + this.FileExtension);
-                using (StreamWriter w = new StreamWriter(Path.Combine(options.SaveAsProjectDirectory, assemblyInfo)))
-                    GenerateCode(codeDomBuilder, new PlainTextOutput(w));
-                return new Tuple<string, string>[] { Tuple.Create("Compile", assemblyInfo) };
-            }
         }
 
         public static string CleanUpName(string text)
@@ -538,7 +443,7 @@ namespace QuantKit
             return text;
         }
 
-        IEnumerable<Tuple<string, string>> WriteCodeFilesInProject(ModuleDefinition module, DecompilationOptions options, HashSet<string> directories)
+        void ParserFilesInProject(ModuleDefinition module, DecompilationOptions options, HashSet<string> directories, List<TNamespace> nsList)
         {
             var files = module.Types.Where(t => IncludeTypeWhenDecompilingProject(t, options)).GroupBy(
                 delegate(TypeDefinition type)
@@ -557,6 +462,7 @@ namespace QuantKit
                     }
                 }, StringComparer.OrdinalIgnoreCase).ToList();
             AstMethodBodyBuilder.ClearUnhandledOpcodes();
+
             Parallel.ForEach(
                 files,
                 new ParallelOptions { MaxDegreeOfParallelism = Environment.ProcessorCount },
@@ -570,118 +476,44 @@ namespace QuantKit
                     }
                     codeDomBuilder.RunTransformations(transformAbortCondition);
 
-                    var clist = codeDomBuilder.SyntaxTree.Descendants.OfType<TypeDeclaration>().ToList();
+                    var visitor = new LuaOutputVisitor();
+                    codeDomBuilder.SyntaxTree.AcceptVisitor(visitor);
 
-                    bool needWrite = false;
-                    if (clist.Count() != 0)
+                    lock (nsList)
                     {
-                        if (clist[0].ClassType == ClassType.Class)
-                            needWrite = true;
+                        nsList.Add(visitor.ns);
                     }
 
-                    if (needWrite)
-                    {
-                        using (StreamWriter w = new StreamWriter(Path.Combine(options.SaveAsProjectDirectory, file.Key)))
-                        {
-                            GenerateCode(codeDomBuilder, new PlainTextOutput(w));
-                        }
-                    }
                 });
-            AstMethodBodyBuilder.PrintNumberOfUnhandledOpcodes();
-            return files.Select(f => Tuple.Create("Compile", f.Key)).Concat(WriteAssemblyInfo(module, options, directories));
-        }
-        #endregion
-
-        #region WriteResourceFilesInProject
-        IEnumerable<Tuple<string, string>> WriteResourceFilesInProject(LoadedAssembly assembly, DecompilationOptions options, HashSet<string> directories)
-        {
-            //AppDomain bamlDecompilerAppDomain = null;
-            //try {
-            foreach (EmbeddedResource r in assembly.ModuleDefinition.Resources.OfType<EmbeddedResource>())
-            {
-                string fileName;
-                Stream s = r.GetResourceStream();
-                s.Position = 0;
-                if (r.Name.EndsWith(".g.resources", StringComparison.OrdinalIgnoreCase))
-                {
-                    IEnumerable<DictionaryEntry> rs = null;
-                    try
-                    {
-                        rs = new ResourceSet(s).Cast<DictionaryEntry>();
-                    }
-                    catch (ArgumentException)
-                    {
-                    }
-                    if (rs != null && rs.All(e => e.Value is Stream))
-                    {
-                        foreach (var pair in rs)
-                        {
-                            fileName = Path.Combine(((string)pair.Key).Split('/').Select(p => CleanUpName(p)).ToArray());
-                            string dirName = Path.GetDirectoryName(fileName);
-                            if (!string.IsNullOrEmpty(dirName) && directories.Add(dirName))
-                            {
-                                Directory.CreateDirectory(Path.Combine(options.SaveAsProjectDirectory, dirName));
-                            }
-                            Stream entryStream = (Stream)pair.Value;
-                            entryStream.Position = 0;
-                            if (fileName.EndsWith(".baml", StringComparison.OrdinalIgnoreCase))
-                            {
-                                //									MemoryStream ms = new MemoryStream();
-                                //									entryStream.CopyTo(ms);
-                                // TODO implement extension point
-                                //									var decompiler = Baml.BamlResourceEntryNode.CreateBamlDecompilerInAppDomain(ref bamlDecompilerAppDomain, assembly.FileName);
-                                //									string xaml = null;
-                                //									try {
-                                //										xaml = decompiler.DecompileBaml(ms, assembly.FileName, new ConnectMethodDecompiler(assembly), new AssemblyResolver(assembly));
-                                //									}
-                                //									catch (XamlXmlWriterException) { } // ignore XAML writer exceptions
-                                //									if (xaml != null) {
-                                //										File.WriteAllText(Path.Combine(options.SaveAsProjectDirectory, Path.ChangeExtension(fileName, ".xaml")), xaml);
-                                //										yield return Tuple.Create("Page", Path.ChangeExtension(fileName, ".xaml"));
-                                //										continue;
-                                //									}
-                            }
-                            using (FileStream fs = new FileStream(Path.Combine(options.SaveAsProjectDirectory, fileName), FileMode.Create, FileAccess.Write))
-                            {
-                                entryStream.CopyTo(fs);
-                            }
-                            yield return Tuple.Create("Resource", fileName);
-                        }
-                        continue;
-                    }
-                }
-                fileName = GetFileNameForResource(r.Name, directories);
-                using (FileStream fs = new FileStream(Path.Combine(options.SaveAsProjectDirectory, fileName), FileMode.Create, FileAccess.Write))
-                {
-                    s.CopyTo(fs);
-                }
-                yield return Tuple.Create("EmbeddedResource", fileName);
-            }
-            //}
-            //finally {
-            //    if (bamlDecompilerAppDomain != null)
-            //        AppDomain.Unload(bamlDecompilerAppDomain);
-            //}
         }
 
-        string GetFileNameForResource(string fullName, HashSet<string> directories)
+        void WriteFilesInProject(ModuleDefinition module, DecompilationOptions options, HashSet<string> directories, TNamespace ns)
         {
-            string[] splitName = fullName.Split('.');
-            string fileName = CleanUpName(fullName);
-            for (int i = splitName.Length - 1; i > 0; i--)
+            string dir = Path.Combine(options.SaveAsProjectDirectory, ns.name + "_lua");
+            Directory.CreateDirectory(dir);
+            
+            foreach (var c in ns.classes)
             {
-                string ns = string.Join(".", splitName, 0, i);
-                if (directories.Contains(ns))
+                string file = CleanUpName(c.name) + ".h";
+                using (StreamWriter w = new StreamWriter(Path.Combine(dir, file)))
                 {
-                    string name = string.Join(".", splitName, i, splitName.Length - i);
-                    fileName = Path.Combine(ns, CleanUpName(name));
-                    break;
+                    WriteTypeAsHpp(new PlainTextOutput(w), c);
                 }
             }
-            return fileName;
+
+            foreach (var c in ns.classes)
+            {
+                string file = CleanUpName(c.name) + ".cpp";
+                using (StreamWriter w = new StreamWriter(Path.Combine(dir, file)))
+                {
+                    WriteTypeAsCpp(new PlainTextOutput(w), c);
+                }
+            }
         }
+
         #endregion
 
+        #region help class
         AstBuilder CreateAstBuilder(DecompilationOptions options, ModuleDefinition currentModule = null, TypeDefinition currentType = null, bool isSingleMember = false)
         {
             if (currentModule == null)
@@ -817,5 +649,6 @@ namespace QuantKit
 
             return base.GetTooltip(member);
         }
+        #endregion
     }
 }

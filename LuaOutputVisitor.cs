@@ -14,6 +14,16 @@ namespace QuantKit
 {
     class LuaOutputVisitor : DepthFirstAstVisitor
     {
+        #region TODO
+        /*
+         * 1.Parameter (array index??)
+         * 2.Event & delegate
+         * */
+        #endregion
+        #region field
+        public TNamespace ns = new TNamespace();
+        #endregion
+
         #region Constructor
         readonly ITextOutput output;
 
@@ -21,291 +31,16 @@ namespace QuantKit
         {
             if (output == null)
             {
-                throw new ArgumentNullException("textWriter");
+                throw new ArgumentNullException("output");
             }
             this.output = output;
         }
-        #endregion
 
-        #region AST
-        public enum TOverloadableOperatorType
-	{
-		None,
-		
-		Add,
-		Subtract,
-		Multiply,
-		Divide,
-		Modulus,
-		Concat,
-		
-		UnaryPlus,
-		UnaryMinus,
-		
-		Not,
-		
-		BitwiseAnd,
-		BitwiseOr,
-		ExclusiveOr,
-		
-		ShiftLeft,
-		ShiftRight,
-		
-		GreaterThan,
-		GreaterThanOrEqual,
-		Equality,
-		InEquality,
-		LessThan,
-		LessThanOrEqual,
-		
-		IsTrue,
-		IsFalse,
-		
-		Like,
-		Power,
-		CType,
-		DivideInteger
-	}//
-        class TParameter
+        public LuaOutputVisitor()
         {
-            public string name;
-            public string optionValue;
-            public string type;
-            public TParameter()
-            {
-
-            }
-        }
-
-
-        class Statement
-        {
-            List<TExpression> expressions;
-        }
-        class TInvoke
-        {
-            public string target;
-            public string member;
-            public string type;
-        }
-
-        class TBody
-        {
-            public string text;
-            public List<TInvoke> invokes;
-            public TBody()
-            {
-                invokes = new List<TInvoke>();
-            }
-        }
-
-        class TAccessor : TEntity
-        {
-            public TBody body;
-            public TAccessor() : base()
-            {
-                body = new TBody();
-            }
-        }
-        class TExpression
-        {
-
-        }
-        class TMemberAccessExpression: TExpression
-        {
-            public string target;
-            public string memberName;
-        }
-        class TInvocationExpression : TExpression
-        {
-            public string methodName;
-            public string typeArguments;
-            public List<TParameter> arguments;
-        }
-        public enum TCastType
-        {
-            DirectCast,
-            TryCast,
-            CType,
-            CBool,
-            CByte,
-            CChar,
-            CDate,
-            CDec,
-            CDbl,
-            CInt,
-            CLng,
-            CObj,
-            CSByte,
-            CShort,
-            CSng,
-            CStr,
-            CUInt,
-            CULng,
-            CUShort
-        }
-        class TCastExpression : TExpression
-        {
-            public TCastType ctype;
-            public string type;
-            public TExpression expression;
-        }
-        class TVariable
-        {
-            public string name;
-            public string typeName;
-            public string init;
-        }
-
-        #region Declaration
-        class TEntity
-        {
-            public string name;
-            public bool isOverride;
-            public bool isPublic;
-            public bool isPrivate;
-            public bool isInternal;
-            public bool isStatic;
-            public string type;
-            public TEntity()
-            {
-                isPublic = false;
-                isInternal = false;
-                isPrivate = false;
-                isOverride = false;
-                isStatic = false;
-            }
-        }
-        class TConstructor : TEntity
-        {
-            public List<TParameter> parameters;
-            public TBody body;
-            public TConstructor() : base()
-            {
-                parameters = new List<TParameter>();
-                body = new TBody();
-            }
-        }
-
-        class TEvent : TEntity
-        {
-            public bool isCustom;
-            public List<TParameter> parameters;
-            public List<TAccessor> accessors;
-        }
-
-        class TField : TEntity
-        {
-            public string init;
-            public TField()
-                : base()
-            {
-            }
-        }
-
-        class TMethod : TEntity
-        {
-            public string typeParameters;
-            public List<TParameter> parameters;
-            public TBody body;
-
-            public TMethod() : base()
-            {
-                parameters = new List<TParameter>();
-                body = new TBody();
-            }
-        }
-
-        class TOperator
-        {
-            public TOverloadableOperatorType toperator;
-            public List<TParameter> parameters;
-            public string returnType;
-            public TOperator()
-            {
-                parameters = new List<TParameter>();
-            }
-        }
-
-        class TProperty : TEntity
-        {
-            public List<TParameter> parameters;
-            public bool isPrivateImplemention;
-            public TAccessor getter;
-            public TAccessor setter;
-            public TProperty() : base()
-            {
-                parameters = new List<TParameter>();
-            }
-        }
-
-        class TBaseClass
-        {
-
-        }
-
-        /*class TDestructor : TEntity
-        {
-            public List<TParameter> parameters;
-            public string body;
-            public TDestructor() : base()
-            {
-                parameters = new List<TParameter>();
-            }
-        }*/
-        class TClass
-        {
-            public string name;
-            public List<TBaseClass> bases;
-            public List<TField> fields;
-            public List<TProperty> properties;
-            public List<TConstructor> constructors;
-            //public List<TDestructor> destructors;
-            public List<TMethod> methods;
-            public TClass()
-            {
-                bases = new List<TBaseClass>();
-                fields = new List<TField>();
-                properties = new List<TProperty>();
-                constructors = new List<TConstructor>();
-                //destructors = new List<TDestructor>();
-                methods = new List<TMethod>();
-            } 
-        }
-
-        class TEnumMember
-        {
-            public string name;
-            //public string type;
-            public string init;
-        }
-
-        class TEnum
-        {
-            public string name;
-            public List<string> bases;
-            public List<TEnumMember> members;
-            public TEnum()
-            {
-                bases = new List<string>();
-                members = new List<TEnumMember>();
-            }
-        }
-
-        class TNamespace
-        {
-            public string name;
-            public List<TClass> classes;
-            public List<TEnum> enums;
-            public TNamespace()
-            {
-                classes = new List<TClass>();
-                enums = new List<TEnum>();
-            }
+            this.output = null;
         }
         #endregion
-        #endregion
-
 
         #region process class , not tested!
         // test ok
@@ -579,11 +314,55 @@ namespace QuantKit
             tc.destructors.Add(dtor);
         }*/
 
+        void processIndexer(IndexerDeclaration indexer, TClass tc)
+        {
+            TIndexer i = new TIndexer();
+            processEntiry(indexer, i);
+
+            var plist = indexer.Descendants.OfType<ParameterDeclaration>().ToList();
+            foreach (var item in plist)
+            {
+                TParameter p = new TParameter();
+                p.name = item.Name;
+                p.type = item.Type.GetText();
+                var text = item.GetText();
+                var split = text.Split('=');
+                if (split.Count() > 1)
+                    p.optionValue = split[split.Count() - 1];
+                i.parameters.Add(p);
+
+            }
+
+            Accessor getter = indexer.Getter;
+            if (!getter.IsNull)
+            {
+                i.getter = new TAccessor();
+                processAccessor(getter, i.getter);
+            };
+
+            Accessor setter = indexer.Setter;
+            if (!setter.IsNull)
+            {
+                i.setter = new TAccessor();
+                processAccessor(setter, i.setter);
+            };
+
+            tc.indexers.Add(i);
+        }
+        // test ok
         void processClass(TypeDeclaration td, TNamespace ns)
         {
             Debug.Assert(td.ClassType != ClassType.Enum);
 
             TClass tc = new TClass();
+            tc.name = td.Name;
+
+
+            foreach (var item in td.BaseTypes)
+            {
+                tc.bases.Add(TypeToString(GetTypeRef(item)));
+            }
+
             var flist = td.Descendants.OfType<FieldDeclaration>().ToList();
             foreach (var item in flist)
             {
@@ -609,6 +388,13 @@ namespace QuantKit
             {
                 processDestructor(item, tc);
             }*/
+            var ilist = td.Descendants.OfType<IndexerDeclaration>().ToList();
+            foreach (var item in ilist)
+            {
+                processIndexer(item, tc);
+            }
+
+
             ns.classes.Add(tc);
         }
         #endregion
@@ -635,14 +421,13 @@ namespace QuantKit
 
                 te.members.Add(member);
             }
-            ns.enums.Add(te);
+            ns.classes.Add(te);
         }
         #endregion
         #region process namespace
         public override void VisitNamespaceDeclaration(NamespaceDeclaration namespaceDeclaration)
         {
             base.VisitNamespaceDeclaration(namespaceDeclaration);
-            TNamespace ns = new TNamespace();
             ns.name = namespaceDeclaration.Name;
             var clist = namespaceDeclaration.Descendants.OfType<TypeDeclaration>().ToList();
             foreach (var item in clist)
@@ -660,139 +445,9 @@ namespace QuantKit
                     processEnum(item, ns);
                 }
             }
-            outputlua(ns);
+            //outputlua(ns);
         }
         
-        #endregion
-
-        #region transform
-        void MakePropertyToMethod(TNamespace ns)
-        {
-
-        }
-        void RenameField(TNamespace ns)
-        {
-
-        }
-        #endregion
-        #region output
-        void outputlua(TNamespace ns)
-        {          
-            output.WriteLine("namespace " + ns.name + "{");
-            foreach (var item in ns.classes)
-            {
-                WriteClass(item);
-            }
-
-            foreach (var item in ns.enums)
-            {
-                WriteEnum(item);
-            }
-            output.WriteLine("} // namespaec " + ns.name);
-        }
-
-        void WriteEnum(TEnum te)
-        {
-            output.WriteLine("enum " + te.name + "{");
-            foreach(var item in te.members) {
-                output.WriteLine("\t" + item.name + (item.init ==null ? "" : "= " + item.init));
-            }
-            output.WriteLine("}");
-        }
-         void WriteClass(TClass tc)
-        {
-             output.WriteLine("class " + tc.name + "{");
-             output.WriteLine("// fields");
-             foreach (var item in tc.fields)
-             {
-                 output.WriteLine("\t" + item.type + " " + item.name + (item.init == null ? "" : item.init));
-             }
-             output.WriteLine("// properties");
-             foreach (var p in tc.properties)
-             {
-                 output.WriteLine(getModifies(p) + " " + p.type + " " + p.name + " ");
-                 output.WriteLine( (p.getter != null ? (p.getter.body.text != "" ? "getter: " +p.getter.body.text : "getter:{}") : ""));
-                 output.WriteLine((p.setter != null ? (p.setter.body.text != "" ? "setter: " + p.setter.body.text : "setter:{}") : ""));
-                 if (p.getter != null)
-                 {
-                     foreach (var i in p.getter.body.invokes)
-                     {
-                         output.WriteLine(i.target + ": " + i.type +" (" + i.member + ")");
-                     }
-                 }
-                 if (p.setter != null)
-                 {
-                     foreach (var i in p.setter.body.invokes)
-                     {
-                         output.WriteLine(i.target + ": " + i.type + " (" + i.member + ")");
-                     }
-                 }
-             }
-
-             output.WriteLine(" // constructor");
-             foreach(var m in tc.constructors)
-             {
-                 bool isfirst = true;
-                 output.Write(getModifies(m) + " " + m.name + "(");
-                 foreach (var p in m.parameters)
-                 {
-                     if (isfirst)
-                         isfirst = false;
-                     else
-                         output.Write(", ");
-                     output.Write(p.type + " " + p.name + " " + (p.optionValue != null ? " = " + p.optionValue : ""));
-                 }
-                 output.Write(")");
-                 output.WriteLine();
-                 output.WriteLine(m.body.text);
-                 foreach (var i in m.body.invokes)
-                 {
-                     output.WriteLine(i.target + ": " + i.type + " (" + i.member + ")");
-                 }
-             }
-
-             /*output.WriteLine(" // destructor");
-             foreach (var m in tc.destructors)
-             {
-                 bool isfirst = true;
-                 output.Write(getModifies(m) + " " + m.name + "(");
-                 foreach (var p in m.parameters)
-                 {
-                     if (isfirst)
-                         isfirst = false;
-                     else
-                         output.Write(", ");
-                     output.Write(p.type + " " + p.name + " " + (p.optionValue != null ? " = " + p.optionValue : ""));
-                 }
-                 output.Write(")");
-                 output.WriteLine();
-                 output.WriteLine(m.body);
-             }*/
-
-             output.WriteLine(" // methods");
-             foreach (var m in tc.methods)
-             {
-                 bool isfirst = true;
-                 output.Write(getModifies(m) + " " + m.type + " " + m.name + "(");
-                 foreach (var p in m.parameters)
-                 {
-                     if (isfirst)
-                         isfirst = false;
-                     else
-                         output.Write(", ");
-                     output.Write(p.type + " " + p.name + " " + (p.optionValue != null ? " = " + p.optionValue : ""));
-                 }
-                 output.Write(")");
-                 output.WriteLine();
-                 output.WriteLine(m.body.text);
-                 foreach (var i in m.body.invokes)
-                 {
-                     output.WriteLine(i.target + ": " + i.type + " (" + i.member + ")");
-                 }
-             }
-
-             output.WriteLine("}; // class end");
-        }
         #endregion
     }
 } 
